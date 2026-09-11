@@ -1,0 +1,62 @@
+:root {
+  color-scheme: light dark;
+  --green: #0d853d;
+  --ink: #0a1c0f;
+  --cream: #f7f5d6;
+  --surface: #fffef5;
+  --line: #bcdcc8;
+  --muted: #526259;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--cream);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+  line-height: 1.75;
+}
+
+main {
+  width: min(720px, calc(100% - 40px));
+  margin: 0 auto;
+  padding: 72px 0 56px;
+}
+
+.brand { display: flex; align-items: center; gap: 18px; }
+.mark { width: 68px; height: 68px; fill: var(--green); flex: 0 0 auto; }
+.mark .route { fill: var(--cream); }
+.eyebrow { margin: 0 0 3px; color: var(--green); font-size: .78rem; font-weight: 700; letter-spacing: .12em; }
+h1 { margin: 0; font-size: clamp(2rem, 7vw, 3.25rem); line-height: 1.15; letter-spacing: -.035em; }
+.lead { margin: 32px 0; max-width: 34rem; color: var(--muted); font-size: 1.08rem; }
+
+nav { border-top: 1px solid var(--line); }
+nav a {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 64px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+a { color: var(--green); text-underline-offset: 3px; }
+footer { margin-top: 48px; color: var(--muted); font-size: .9rem; }
+
+.document { background: var(--surface); padding: 56px; margin-top: 40px; margin-bottom: 40px; border: 1px solid var(--line); }
+.document .back { display: inline-block; margin-bottom: 36px; font-weight: 650; text-decoration: none; }
+.document .updated { margin: 12px 0 36px; color: var(--muted); font-size: .9rem; }
+.document h2 { margin: 40px 0 10px; font-size: 1.25rem; line-height: 1.4; }
+.document p, .document ul { margin: 0; }
+.document li + li { margin-top: 6px; }
+
+@media (max-width: 600px) {
+  main { padding-top: 40px; }
+  .document { width: 100%; margin: 0; padding: 36px 22px 52px; border: 0; }
+}
+
+@media (prefers-color-scheme: dark) {
+  :root { --ink: #edf5ef; --cream: #101712; --surface: #151f18; --line: #31543c; --muted: #a9b8ae; }
+}
