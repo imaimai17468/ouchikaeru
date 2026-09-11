@@ -1,0 +1,108 @@
+included:
+  - Sources
+  - Shared
+  - iPhone
+  - Widget
+  - Watch
+  - Tests
+  - UITests
+
+excluded:
+  - .build
+  - .swiftpm
+
+opt_in_rules:
+  - array_init
+  - closure_spacing
+  - collection_alignment
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - direct_return
+  - discarded_notification_center_observer
+  - empty_collection_literal
+  - empty_count
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - force_unwrapping
+  - implicitly_unwrapped_optional
+  - last_where
+  - legacy_multiple
+  - legacy_objc_type
+  - literal_expression_end_indentation
+  - modifier_order
+  - operator_usage_whitespace
+  - optional_enum_case_matching
+  - overridden_super_call
+  - redundant_nil_coalescing
+  - sorted_first_last
+  - static_operator
+  - toggle_bool
+  - unavailable_function
+  - unneeded_parentheses_in_closure_argument
+  - vertical_parameter_alignment_on_call
+  - weak_delegate
+  - yoda_condition
+
+analyzer_rules:
+  - unused_declaration
+  - unused_import
+
+opening_brace:
+  ignore_multiline_type_headers: true
+  ignore_multiline_statement_conditions: true
+  ignore_multiline_function_signatures: true
+
+custom_rules:
+  no_inline_lint_suppression:
+    name: Inline lint suppression is forbidden
+    regex: '(?i)(swiftlint\s*:\s*(disable|enable)|swift-format-ignore|swiftformat\s*:\s*(disable|enable))'
+    message: Fix the code or change the shared configuration with a documented reason.
+    severity: error
+  no_concurrency_suppression:
+    name: Unsafe concurrency suppression is forbidden
+    regex: '(@preconcurrency|@unchecked\s+Sendable|nonisolated\s*\(\s*unsafe\s*\))'
+    message: Express actor isolation and Sendable behavior in the type structure.
+    severity: error
+
+line_length:
+  warning: 160
+  error: 180
+  ignores_comments: true
+  ignores_urls: true
+
+file_length:
+  warning: 600
+  error: 800
+
+type_body_length:
+  warning: 300
+  error: 450
+
+function_body_length:
+  warning: 80
+  error: 120
+
+cyclomatic_complexity:
+  warning: 15
+  error: 20
+
+function_parameter_count:
+  warning: 6
+  error: 8
+
+trailing_comma:
+  mandatory_comma: true
+
+identifier_name:
+  min_length:
+    warning: 2
+  excluded:
+    - f
+    - h
+    - r
+    - x
+    - y
+
+reporter: xcode

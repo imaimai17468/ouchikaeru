@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "lineLength": 130,
+  "tabWidth": 4,
+  "indentation": {
+    "spaces": 4
+  },
+  "maximumBlankLines": 1,
+  "multiElementCollectionTrailingCommas": true,
+  "respectsExistingLineBreaks": false,
+  "rules": {
+    "NeverForceUnwrap": true,
+    "NeverUseForceTry": true,
+    "NeverUseImplicitlyUnwrappedOptionals": true,
+    "OrderedImports": true
+  }
+}
