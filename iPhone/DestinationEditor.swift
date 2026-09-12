@@ -36,26 +36,28 @@ struct DestinationEditor: View {
 
     var body: some View {
         NavigationStack {
-            MapReader { proxy in
-                Map(position: $camera) {
-                    if let coordinate {
-                        Marker(
-                            address ?? "選択した場所",
-                            coordinate: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
-                        ).tint(Color.ouchiGreen)
-                    }
-                }.mapStyle(.standard(emphasis: .muted)).onTapGesture { point in
-                    guard let selected = proxy.convert(point, from: .local) else { return }
-                    cancelCurrentLocationRequest()
-                    searchFocused = false
-                    query = ""
-                    coordinate = Coordinate(latitude: selected.latitude, longitude: selected.longitude)
-                    selectedName = nil
-                    address = nil
-                    message = nil
-                    selectionID = UUID()
-                }.overlay(alignment: .top) { searchPanel.padding(16) }.safeAreaInset(edge: .bottom, spacing: 0) { selectionPanel }
-                    .task(id: selectionID) {
+            GeometryReader { geometry in
+                MapReader { proxy in
+                    Map(position: $camera) {
+                        if let coordinate {
+                            Marker(
+                                address ?? "選択した場所",
+                                coordinate: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                            ).tint(Color.ouchiGreen)
+                        }
+                    }.mapStyle(.standard(emphasis: .muted)).onTapGesture { point in
+                        guard let selected = proxy.convert(point, from: .local) else { return }
+                        cancelCurrentLocationRequest()
+                        searchFocused = false
+                        query = ""
+                        coordinate = Coordinate(latitude: selected.latitude, longitude: selected.longitude)
+                        selectedName = nil
+                        address = nil
+                        message = nil
+                        selectionID = UUID()
+                    }.overlay(alignment: .top) { topPanel.padding(16) }.overlay(alignment: .bottom) {
+                        selectionPanel.offset(y: geometry.safeAreaInsets.bottom)
+                    }.task(id: selectionID) {
                         guard !currentLocationState.isLocating, let coordinate, address == nil else { return }
                         let requestID = selectionID
                         resolving = true
@@ -77,44 +79,43 @@ struct DestinationEditor: View {
                             selectedName = address
                         }
                     }
-            }.navigationTitle(existing == nil ? "帰る場所を登録" : "住所を変更").navigationBarTitleDisplayMode(.inline).toolbar {
-                ToolbarItem(placement: .topBarTrailing) { Button("閉じる", systemImage: "xmark") { dismiss() } }
-            }.onAppear {
-                if let existing {
-                    selectedName = existing.name
-                    address = existing.address ?? existing.name
-                    coordinate = existing.coordinate
-                    moveCamera(to: existing.coordinate)
-                }
-            }.onDisappear { currentLocationTask?.cancel() }.onChange(of: query) { _, value in
-                if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { cancelCurrentLocationRequest() }
-            }.task(id: query) {
-                places = []
-                message = nil
-                searching = false
-                let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else { return }
-                do {
-                    try await Task.sleep(for: .milliseconds(400))
-                    searching = true
-                    var results = try await TransitAPI().places(query: text)
-                    try Task.checkCancellation()
-                    if results.isEmpty { results = try await mapPlaces(query: text) }
-                    places = results
+                }.toolbar(.hidden, for: .navigationBar).onAppear {
+                    if let existing {
+                        selectedName = existing.name
+                        address = existing.address ?? existing.name
+                        coordinate = existing.coordinate
+                        moveCamera(to: existing.coordinate)
+                    }
+                }.onDisappear { currentLocationTask?.cancel() }.onChange(of: query) { _, value in
+                    if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { cancelCurrentLocationRequest() }
+                }.task(id: query) {
+                    places = []
+                    message = nil
                     searching = false
-                    if results.isEmpty { message = "住所が見つかりませんでした。別の住所でお試しください。" }
-                } catch {
-                    guard !Task.isCancelled else { return }
+                    let text = query.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !text.isEmpty else { return }
                     do {
-                        let fallback = try await mapPlaces(query: text)
-                        guard !Task.isCancelled else { return }
-                        places = fallback
+                        try await Task.sleep(for: .milliseconds(400))
+                        searching = true
+                        var results = try await TransitAPI().places(query: text)
+                        try Task.checkCancellation()
+                        if results.isEmpty { results = try await mapPlaces(query: text) }
+                        places = results
                         searching = false
-                        if fallback.isEmpty { message = "住所が見つかりませんでした。別の住所でお試しください。" }
+                        if results.isEmpty { message = "住所が見つかりませんでした。別の住所でお試しください。" }
                     } catch {
                         guard !Task.isCancelled else { return }
-                        searching = false
-                        message = "検索できませんでした。もう一度お試しください。"
+                        do {
+                            let fallback = try await mapPlaces(query: text)
+                            guard !Task.isCancelled else { return }
+                            places = fallback
+                            searching = false
+                            if fallback.isEmpty { message = "住所が見つかりませんでした。別の住所でお試しください。" }
+                        } catch {
+                            guard !Task.isCancelled else { return }
+                            searching = false
+                            message = "検索できませんでした。もう一度お試しください。"
+                        }
                     }
                 }
             }
@@ -218,6 +219,14 @@ struct DestinationEditor: View {
             }
         }.background(.regularMaterial, in: RoundedRectangle(cornerRadius: 22)).shadow(
             color: .black.opacity(0.1), radius: 16, y: 6)
+    }
+
+    private var topPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            searchPanel
+            Button("閉じる", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly).font(.headline).frame(width: 52, height: 52)
+                .background(.regularMaterial, in: Circle()).shadow(color: .black.opacity(0.1), radius: 16, y: 6)
+        }
     }
 
     private var selectionPanel: some View {

@@ -22,6 +22,10 @@ final class RouteFlowTests: XCTestCase {
 
         let currentLocation = app.descendants(matching: .any)["destination-current-location"]
         XCTAssertTrue(currentLocation.waitForExistence(timeout: 5))
+        let editorScreenshot = XCTAttachment(screenshot: app.screenshot())
+        editorScreenshot.name = "住所編集画面"
+        editorScreenshot.lifetime = .keepAlways
+        add(editorScreenshot)
         currentLocation.tap()
 
         let save = app.buttons["この住所を登録"]
