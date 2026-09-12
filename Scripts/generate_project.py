@@ -3,6 +3,7 @@ from pathlib import Path
 import hashlib
 import json
 import plistlib
+import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 objects = {}
@@ -81,13 +82,21 @@ schemes.mkdir(parents=True,exist_ok=True)
 for name in specs:
     ext = 'appex' if name == 'OuchikaeruWidget' else 'app'
     ref=f'<BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="{uid(name)}" BuildableName="{name}.{ext}" BlueprintName="{name}" ReferencedContainer="container:Ouchikaeru.xcodeproj"/>'
-    (schemes/f'{name}.xcscheme').write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
-<Scheme LastUpgradeVersion="2600" version="1.3">
+    launcher = 'Xcode.IDEFoundation.Launcher.LLDB' if name == 'Ouchikaeru' else 'Xcode.DebuggerFoundation.Launcher.LLDB'
+    debug_service = '' if name == 'Ouchikaeru' else ' debugServiceExtension="internal"'
+    location = '<LocationScenarioReference identifier="../../../Config/TokyoStation.gpx" referenceType="0"/>' if name == 'Ouchikaeru' else ''
+    scheme_path = schemes/f'{name}.xcscheme'
+    scheme_path.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
+<Scheme LastUpgradeVersion="2600" version="1.7">
 <BuildAction parallelizeBuildables="YES" buildImplicitDependencies="YES"><BuildActionEntries><BuildActionEntry buildForTesting="YES" buildForRunning="YES" buildForProfiling="YES" buildForArchiving="YES" buildForAnalyzing="YES">{ref}</BuildActionEntry></BuildActionEntries></BuildAction>
-<LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.IDEFoundation.Launcher.LLDB" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES" allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref}</BuildableProductRunnable></LaunchAction>
+<TestAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="Xcode.DebuggerFoundation.Launcher.LLDB" shouldUseLaunchSchemeArgsEnv="YES" shouldAutocreateTestPlan="YES"/>
+<LaunchAction buildConfiguration="Debug" selectedDebuggerIdentifier="Xcode.DebuggerFoundation.Debugger.LLDB" selectedLauncherIdentifier="{launcher}" launchStyle="0" useCustomWorkingDirectory="NO" ignoresPersistentStateOnLaunch="NO" debugDocumentVersioning="YES"{debug_service} allowLocationSimulation="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref}</BuildableProductRunnable>{location}</LaunchAction>
 <ProfileAction buildConfiguration="Release" shouldUseLaunchSchemeArgsEnv="YES" savedToolIdentifier="" useCustomWorkingDirectory="NO" debugDocumentVersioning="YES"><BuildableProductRunnable runnableDebuggingMode="0">{ref}</BuildableProductRunnable></ProfileAction>
 <AnalyzeAction buildConfiguration="Debug"/><ArchiveAction buildConfiguration="Release" revealArchiveInOrganizer="YES"/>
 </Scheme>''')
+    tree = ET.parse(scheme_path)
+    ET.indent(tree, space='   ')
+    tree.write(scheme_path, encoding='UTF-8', xml_declaration=True)
 print('Generated Ouchikaeru.xcodeproj')
 if (ROOT/'UITests/RouteFlowTests.swift').exists():
     import subprocess
