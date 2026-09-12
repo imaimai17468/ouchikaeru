@@ -1,19 +1,6 @@
 import Combine
 import Foundation
 
-@MainActor protocol DeviceLocationProviding: AnyObject { func locate(fallback: Coordinate?) async throws -> Coordinate }
-
-extension LocationProvider: DeviceLocationProviding {}
-
-protocol RouteSnapshotStoring {
-    var destination: Destination? { get }
-    var summary: RouteSummary? { get }
-    func save(destination: Destination?) throws
-    func save(summary: RouteSummary?) throws
-}
-
-extension SharedStore: RouteSnapshotStoring {}
-
 @MainActor final class WatchRouteModel: ObservableObject {
     @Published private(set) var state: RouteLoadState
 

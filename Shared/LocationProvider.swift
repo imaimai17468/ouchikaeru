@@ -1,5 +1,7 @@
 import CoreLocation
 
+@MainActor protocol DeviceLocationProviding: AnyObject { func locate(fallback: Coordinate?) async throws -> Coordinate }
+
 @MainActor final class LocationProvider: NSObject, @MainActor CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     private var pending: CheckedContinuation<Coordinate, Error>?
@@ -76,3 +78,5 @@ import CoreLocation
         continuation?.resume(with: result)
     }
 }
+
+extension LocationProvider: DeviceLocationProviding {}

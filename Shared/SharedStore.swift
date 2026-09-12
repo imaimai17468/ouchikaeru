@@ -1,6 +1,13 @@
 import Foundation
 
-struct SharedStore {
+protocol RouteSnapshotStoring {
+    var destination: Destination? { get }
+    var summary: RouteSummary? { get }
+    func save(destination: Destination?) throws
+    func save(summary: RouteSummary?) throws
+}
+
+struct SharedStore: RouteSnapshotStoring {
     // Must match the App Group entitlement on iPhone and Widget.
     static let group = "group.jp.ouchikaeru.app"
     private let defaults: UserDefaults
