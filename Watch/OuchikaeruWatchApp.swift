@@ -62,7 +62,7 @@ private struct WatchRouteContent: View {
         if summary.isStale(at: now) { Text("情報が古くなっています").font(.caption2).foregroundStyle(.orange) }
         if let trip = summary.trip(at: now) {
             WatchArrivalHero(trip: trip, destinationName: summary.destination.name, now: now)
-            WatchRouteDetail(trip: trip, now: now)
+            WatchRouteDetail(title: "経路詳細", trip: trip, now: now)
         }
         WatchLastTrainSummary(summary: summary, now: now)
         Text(ServiceClock.updated(summary.fetchedAt)).font(.caption2).foregroundStyle(.secondary)
@@ -108,12 +108,13 @@ private struct WatchArrivalHero: View {
 }
 
 private struct WatchRouteDetail: View {
+    let title: String
     let trip: Trip
     let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            Text("経路詳細").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 9) {
                 Rectangle().fill(Color.ouchiGreen).frame(width: 2)
                 VStack(alignment: .leading, spacing: 9) {
@@ -186,10 +187,11 @@ private struct WatchLastTrainSummary: View {
                 Text("\(last.departure.stationName) 発  ·  \(summary.destination.name) 到着").font(.caption2).foregroundStyle(
                     .secondary
                 ).lineLimit(1)
+                WatchRouteDetail(title: "終電の経路詳細", trip: last, now: now)
             } else {
                 Text(summary.lastTrainText(at: now)).font(.caption2).foregroundStyle(.secondary)
             }
-        }.accessibilityElement(children: .combine)
+        }
     }
 }
 
