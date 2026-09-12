@@ -128,6 +128,32 @@ public struct RouteSummary: Codable, Equatable, Sendable {
     }
 }
 
+public enum RouteLoadingPhase: Equatable, Sendable {
+    case locating
+    case preparing
+    case searching
+    case lastTrain
+}
+
+public enum RouteLoadState: Equatable, Sendable {
+    case loading(previous: RouteSummary?, phase: RouteLoadingPhase)
+    case available(RouteSummary)
+    case unavailable(previous: RouteSummary?, message: String)
+    case failure(previous: RouteSummary?, message: String)
+
+    public var summary: RouteSummary? {
+        switch self {
+        case .loading(let previous, _), .unavailable(let previous, _), .failure(let previous, _): return previous
+        case .available(let summary): return summary
+        }
+    }
+
+    public var isLoading: Bool {
+        if case .loading = self { return true }
+        return false
+    }
+}
+
 public enum ServiceClock {
     public static var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)

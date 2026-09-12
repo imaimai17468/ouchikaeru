@@ -36,8 +36,12 @@ struct SharedStore {
         if changed, let data = try? JSONEncoder().encode(stored) { defaults.set(data, forKey: "summary") }
         return stored
     }
-    func save(destination: Destination) throws {
-        let data = try JSONEncoder().encode(destination)
+    func save(destination: Destination?) throws {
+        guard let destination else {
+            defaults.removeObject(forKey: "destination")
+            defaults.removeObject(forKey: "summary")
+            return
+        }
         if var retained = summary, retained.destination.id == destination.id,
             retained.destination.coordinate == destination.coordinate
         {
@@ -46,7 +50,7 @@ struct SharedStore {
         } else {
             defaults.removeObject(forKey: "summary")
         }
-        defaults.set(data, forKey: "destination")
+        defaults.set(try JSONEncoder().encode(destination), forKey: "destination")
     }
     func save(summary: RouteSummary?) throws {
         if let summary {

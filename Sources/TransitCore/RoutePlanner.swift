@@ -16,8 +16,16 @@ public struct CurrentRoutePlan: Sendable {
     public let needsLastTrain: Bool
 }
 
+public protocol RoutePlanning: Sendable {
+    func prepare(origin: Coordinate, destination: Coordinate) async -> StationSearchContext?
+    func currentRoute(
+        origin: Coordinate, destination: Destination, context: StationSearchContext?, previous: RouteSummary?, now: Date
+    ) async throws -> CurrentRoutePlan
+    func addingLastTrain(to summary: RouteSummary, context: StationSearchContext?, now: Date) async -> RouteSummary
+}
+
 /// Coordinates the route rules shared by the iPhone and Apple Watch clients.
-public actor RoutePlanner {
+public actor RoutePlanner: RoutePlanning {
     private let router: StationRouter
     private let clock: WallClock
 

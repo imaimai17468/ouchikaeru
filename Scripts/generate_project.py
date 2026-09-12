@@ -54,7 +54,7 @@ for name, (files, sdk, bundle, kind, folder) in specs.items():
     if name == 'Ouchikaeru':
         info.update(NSLocationWhenInUseUsageDescription='現在地から登録した目的地までの経路を検索するため、現在地を交通経路APIへ送信します。', UILaunchScreen={}, UISupportedInterfaceOrientations=['UIInterfaceOrientationPortrait'], CFBundleURLTypes=[dict(CFBundleURLName=bundle,CFBundleURLSchemes=['ouchikaeru'])])
     elif name == 'OuchikaeruWidget': info['NSExtension'] = dict(NSExtensionPointIdentifier='com.apple.widgetkit-extension')
-    else: info.update(WKApplication=True, WKCompanionAppBundleIdentifier='jp.ouchikaeru.app', WKRunsIndependentlyOfCompanionApp=False)
+    else: info.update(WKApplication=True, WKCompanionAppBundleIdentifier='jp.ouchikaeru.app', WKRunsIndependentlyOfCompanionApp=False, NSLocationWhenInUseUsageDescription='現在地から登録した目的地までの経路を検索するため、現在地を交通経路APIへ送信します。')
     (ROOT/'Config'/f'{folder}-Info.plist').write_bytes(plistlib.dumps(info))
 
 for child, dst, path in [('OuchikaeruWidget',13,''),('OuchikaeruWatch',16,'$(CONTENTS_FOLDER_PATH)/Watch')]:

@@ -1,58 +1,90 @@
 import SwiftUI
 
 @main struct OuchikaeruWatchApp: App {
-    @StateObject private var sync = WatchSync.shared
+    @StateObject private var model = WatchRouteModel()
     @Environment(\.scenePhase) private var scenePhase
     var body: some Scene {
         WindowGroup {
-            WatchHomeView(sync: sync).task { sync.refreshIfNeeded() }.onChange(of: scenePhase) { _, phase in
-                if phase == .active { sync.refreshIfNeeded() }
+            WatchHomeView(model: model).task { model.refreshOnActivation() }.onChange(of: scenePhase) { _, phase in
+                if phase == .active { model.refreshOnActivation() }
             }
         }
     }
 }
 
 private struct WatchHomeView: View {
-    @ObservedObject var sync: WatchSync
+    @ObservedObject var model: WatchRouteModel
     private let refreshTimer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    if let summary = sync.summary {
-                        WatchDestinationHeader(
-                            name: summary.destination.name, isRefreshing: sync.isRequestingRefresh,
-                            refresh: { sync.requestRefresh() })
-                        if summary.isStale(at: context.date) { Text("情報が古くなっています").font(.caption2).foregroundStyle(.orange) }
-                        if let statusMessage = sync.statusMessage {
-                            Text(statusMessage).font(.caption2).foregroundStyle(Color.ouchiGreen)
-                        }
-                        if let trip = summary.trip(at: context.date) {
-                            WatchArrivalHero(trip: trip, destinationName: summary.destination.name, now: context.date)
-                            WatchRouteDetail(trip: trip, now: context.date)
-                            WatchLastTrainSummary(summary: summary, now: context.date)
-                        } else {
-                            Text("利用できる経路がありません。")
-                            WatchLastTrainSummary(summary: summary, now: context.date)
-                        }
-                        Text(ServiceClock.updated(summary.fetchedAt)).font(.caption2).foregroundStyle(.secondary)
-                    } else {
-                        OuchiMark().frame(width: 50, height: 50)
-                        Text("経路情報がありません").font(.headline)
-                        Button {
-                            sync.requestRefresh()
-                        } label: {
-                            if sync.isRequestingRefresh { ProgressView() } else { Label("経路を取得", systemImage: "arrow.clockwise") }
-                        }.buttonStyle(.borderedProminent).tint(Color.ouchiGreen)
-                        if let statusMessage = sync.statusMessage {
-                            Text(statusMessage).font(.caption2).foregroundStyle(.secondary)
-                        }
-                    }
-                    if let error = sync.error { Text(error).font(.caption2).foregroundStyle(.orange) }
-                }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+            ScrollView { WatchRouteContent(state: model.state, now: context.date, refresh: model.refresh) }
+        }.onReceive(refreshTimer) { date in model.refreshIfNeeded(at: date) }
+    }
+}
+
+private struct WatchRouteContent: View {
+    let state: RouteLoadState
+    let now: Date
+    let refresh: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            switch state {
+            case .available(let summary): summaryContent(summary)
+            case .loading(let previous, let phase):
+                if let previous {
+                    summaryContent(previous, notice: phase.message, noticeColor: Color.ouchiGreen)
+                } else {
+                    emptyContent(message: phase.message, isLoading: true)
+                }
+            case .unavailable(let previous, let message):
+                if let previous {
+                    summaryContent(previous, notice: message, noticeColor: .orange)
+                } else {
+                    emptyContent(message: message, isLoading: false)
+                }
+            case .failure(let previous, let message):
+                if let previous {
+                    summaryContent(previous, notice: message, noticeColor: .orange)
+                } else {
+                    emptyContent(message: message, isLoading: false)
+                }
             }
-        }.onReceive(refreshTimer) { date in sync.refreshIfNeeded(at: date) }
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 4)
+    }
+
+    @ViewBuilder private func summaryContent(_ summary: RouteSummary, notice: String? = nil, noticeColor: Color = .secondary)
+        -> some View
+    {
+        WatchDestinationHeader(name: summary.destination.name, isRefreshing: state.isLoading, refresh: refresh)
+        if let notice { Text(notice).font(.caption2).foregroundStyle(noticeColor) }
+        if summary.isStale(at: now) { Text("情報が古くなっています").font(.caption2).foregroundStyle(.orange) }
+        if let trip = summary.trip(at: now) {
+            WatchArrivalHero(trip: trip, destinationName: summary.destination.name, now: now)
+            WatchRouteDetail(trip: trip, now: now)
+        }
+        WatchLastTrainSummary(summary: summary, now: now)
+        Text(ServiceClock.updated(summary.fetchedAt)).font(.caption2).foregroundStyle(.secondary)
+    }
+
+    @ViewBuilder private func emptyContent(message: String, isLoading: Bool) -> some View {
+        OuchiMark().frame(width: 50, height: 50)
+        Text("経路情報がありません").font(.headline)
+        Button(action: refresh) { if isLoading { ProgressView() } else { Label("経路を取得", systemImage: "arrow.clockwise") } }
+            .buttonStyle(.borderedProminent).tint(Color.ouchiGreen).disabled(isLoading)
+        Text(message).font(.caption2).foregroundStyle(isLoading ? Color.secondary : Color.orange)
+    }
+}
+
+private extension RouteLoadingPhase {
+    var message: String {
+        switch self {
+        case .locating: return "現在地を取得中"
+        case .preparing: return "駅と徒歩ルートを確認中"
+        case .searching: return "経路を検索中"
+        case .lastTrain: return "終電を確認中"
+        }
     }
 }
 
