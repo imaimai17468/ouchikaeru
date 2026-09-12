@@ -1,6 +1,6 @@
 # Agent instructions
 
-Read [docs/swift-style.md](docs/swift-style.md) before editing Swift.
+Read [docs/swift-style.md](docs/swift-style.md) and [docs/swift-architecture.md](docs/swift-architecture.md) before editing Swift.
 
 After changing Swift:
 
@@ -13,5 +13,9 @@ Treat formatter and lint failures as code defects. Fix the code instead of addin
 Keep UI state explicit. A view that displays remote data must handle loading, available, unavailable, and failure states without changing unrelated layout. Keep shared route behavior in `TransitCore`; iPhone, Widget, and Watch views consume the shared model.
 
 Use structured concurrency. Isolate UI state to `@MainActor`, make values crossing isolation boundaries `Sendable`, retain cancellable tasks that can outlive a view action, and reject stale asynchronous results before publishing them.
+
+Split work into independently green, independently revertible features. Make one commit per feature and stage only explicit paths. Keep documentation-only and drive-by changes in separate commits.
+
+When a framework API, entitlement, Info.plist key, or Xcode setting is not already established by the repository, verify it against current official Apple documentation before implementing it.
 
 Do not add generated build output, DerivedData, credentials, API responses containing user coordinates, or simulator state to the repository.
