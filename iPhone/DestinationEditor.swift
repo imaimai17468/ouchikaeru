@@ -1,6 +1,17 @@
 import MapKit
 import SwiftUI
 
+private enum CurrentLocationSelectionState: Equatable {
+    case idle
+    case locating
+    case failure(message: String, needsPermission: Bool)
+
+    var isLocating: Bool {
+        if case .locating = self { return true }
+        return false
+    }
+}
+
 struct DestinationEditor: View {
     let existing: Destination?
     let onSave: (Destination) -> Void
@@ -15,6 +26,9 @@ struct DestinationEditor: View {
     @State private var searching = false
     @State private var resolving = false
     @State private var selectionID = UUID()
+    @State private var currentLocationState: CurrentLocationSelectionState = .idle
+    @State private var currentLocationRequestID = UUID()
+    @State private var currentLocationTask: Task<Void, Never>?
     @State private var camera: MapCameraPosition = .region(
         MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 35.681, longitude: 139.767),
@@ -32,6 +46,7 @@ struct DestinationEditor: View {
                     }
                 }.mapStyle(.standard(emphasis: .muted)).onTapGesture { point in
                     guard let selected = proxy.convert(point, from: .local) else { return }
+                    cancelCurrentLocationRequest()
                     searchFocused = false
                     query = ""
                     coordinate = Coordinate(latitude: selected.latitude, longitude: selected.longitude)
@@ -41,7 +56,7 @@ struct DestinationEditor: View {
                     selectionID = UUID()
                 }.overlay(alignment: .top) { searchPanel.padding(16) }.safeAreaInset(edge: .bottom, spacing: 0) { selectionPanel }
                     .task(id: selectionID) {
-                        guard let coordinate, address == nil else { return }
+                        guard !currentLocationState.isLocating, let coordinate, address == nil else { return }
                         let requestID = selectionID
                         resolving = true
                         defer { if requestID == selectionID { resolving = false } }
@@ -71,6 +86,8 @@ struct DestinationEditor: View {
                     coordinate = existing.coordinate
                     moveCamera(to: existing.coordinate)
                 }
+            }.onDisappear { currentLocationTask?.cancel() }.onChange(of: query) { _, value in
+                if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { cancelCurrentLocationRequest() }
             }.task(id: query) {
                 places = []
                 message = nil
@@ -157,12 +174,23 @@ struct DestinationEditor: View {
                         .iconOnly)
                 }
             }.padding(16)
+            Divider()
+            Button(action: selectCurrentLocation) {
+                HStack(spacing: 12) {
+                    Image(systemName: "location.fill").foregroundStyle(Color.ouchiGreen)
+                    Text("現在地を指定").foregroundStyle(.primary)
+                    Spacer(minLength: 0)
+                    if currentLocationState.isLocating { ProgressView() }
+                }.padding(.horizontal, 16).frame(minHeight: 44)
+            }.buttonStyle(.plain).disabled(currentLocationState.isLocating).accessibilityIdentifier(
+                "destination-current-location")
             if !places.isEmpty {
                 Divider()
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(places) { place in
                             Button {
+                                cancelCurrentLocationRequest()
                                 selectionID = UUID()
                                 coordinate = place.coordinate
                                 selectedName = place.displayName
@@ -194,7 +222,9 @@ struct DestinationEditor: View {
 
     private var selectionPanel: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if resolving {
+            if currentLocationState.isLocating {
+                ProgressView("現在地を取得中")
+            } else if resolving {
                 ProgressView("この場所の住所を確認中")
             } else if let address {
                 Label("目的地の住所", systemImage: "mappin.and.ellipse").font(.caption.bold()).foregroundStyle(.secondary)
@@ -217,8 +247,54 @@ struct DestinationEditor: View {
                 Text("住所を検索すると、地図で場所を確認できます。地図をタップして選ぶこともできます。").font(.subheadline).foregroundStyle(.secondary)
             }
             if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
+            if case .failure(let message, let needsPermission) = currentLocationState {
+                Text(message).font(.caption).foregroundStyle(.red)
+                if needsPermission {
+                    Button("位置情報の設定を開く") {
+                        if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
+                            UIApplication.shared.open(settingsURL)
+                        }
+                    }
+                }
+            }
         }.frame(maxWidth: .infinity, alignment: .leading).padding(20).background(
             .regularMaterial, in: UnevenRoundedRectangle(topLeadingRadius: 28, topTrailingRadius: 28))
+    }
+
+    private func selectCurrentLocation() {
+        cancelCurrentLocationRequest()
+        searchFocused = false
+        query = ""
+        places = []
+        message = nil
+        selectionID = UUID()
+        currentLocationState = .locating
+        currentLocationRequestID = UUID()
+        let requestID = currentLocationRequestID
+        currentLocationTask = Task { @MainActor in
+            do {
+                let selected = try await LocationProvider().locate(fallback: nil)
+                try Task.checkCancellation()
+                guard requestID == currentLocationRequestID else { return }
+                coordinate = selected
+                selectedName = nil
+                address = nil
+                currentLocationState = .idle
+                moveCamera(to: selected)
+                selectionID = UUID()
+            } catch {
+                guard !Task.isCancelled, requestID == currentLocationRequestID else { return }
+                currentLocationState = .failure(
+                    message: error.localizedDescription, needsPermission: (error as? LocationProvider.Failure) == .denied)
+            }
+        }
+    }
+
+    private func cancelCurrentLocationRequest() {
+        currentLocationRequestID = UUID()
+        currentLocationTask?.cancel()
+        currentLocationTask = nil
+        currentLocationState = .idle
     }
 
     private func moveCamera(to coordinate: Coordinate) {

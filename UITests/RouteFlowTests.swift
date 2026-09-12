@@ -1,6 +1,35 @@
 import XCTest
 
 final class RouteFlowTests: XCTestCase {
+    func testSelectCurrentLocationAsDestination() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+
+        let register = app.buttons["目的地を登録"]
+        if register.waitForExistence(timeout: 5) {
+            register.tap()
+        } else {
+            let loading = app.progressIndicators["route-loading-progress"]
+            if loading.exists {
+                let finished = XCTNSPredicateExpectation(predicate: NSPredicate(format: "exists == false"), object: loading)
+                XCTAssertEqual(XCTWaiter.wait(for: [finished], timeout: 100), .completed, "経路更新が完了しない")
+            }
+            let editAddress = app.buttons["住所を変更"]
+            XCTAssertTrue(editAddress.waitForExistence(timeout: 100), "住所変更画面を開けない")
+            editAddress.tap()
+        }
+
+        let currentLocation = app.descendants(matching: .any)["destination-current-location"]
+        XCTAssertTrue(currentLocation.waitForExistence(timeout: 5))
+        currentLocation.tap()
+
+        let save = app.buttons["この住所を登録"]
+        XCTAssertTrue(save.waitForExistence(timeout: 30), "現在地の住所を確認できない: \(app.debugDescription)")
+        save.tap()
+        XCTAssertTrue(app.buttons["住所を変更"].waitForExistence(timeout: 10), "現在地を目的地として保存できない")
+    }
+
     func testRegisterDestinationAndDisplayRealRoute() throws {
         continueAfterFailure = false
         let app = XCUIApplication()
