@@ -97,8 +97,8 @@ struct HomeView: View {
                     destinationName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             } message: {
                 Text("住所はそのままで、表示する名前を変更します。")
-            }.refreshable { await model.refresh() }.onReceive(refreshTimer) { _ in
-                if model.summary?.needsRefresh() == true, model.message == nil { Task { await model.refresh() } }
+            }.refreshable { await model.refresh() }.onReceive(refreshTimer) { date in
+                if model.summary?.needsRefresh(at: date) == true, model.message == nil { Task { await model.refresh() } }
             }
         }
     }
@@ -187,7 +187,8 @@ private struct JourneyCard: View {
                     }.padding(.horizontal, 10).background(Color.appSurface)
                 }.buttonStyle(.plain).accessibilityValue(expanded ? "開いています" : "閉じています")
             }.font(.caption).foregroundStyle(.secondary).frame(minHeight: 44)
-            RouteDetail(trip: trip, destinationName: destinationName, expanded: expanded).padding(.top, expanded ? 8 : 0)
+            RouteDetail(trip: trip, destinationName: destinationName, now: now, expanded: expanded).padding(
+                .top, expanded ? 8 : 0)
         }.padding(18).flatCard()
     }
 
@@ -199,24 +200,25 @@ private struct JourneyCard: View {
 private struct RouteDetail: View {
     let trip: Trip
     let destinationName: String
+    let now: Date
     let expanded: Bool
     @State private var detailHeight: CGFloat = 0
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
             WalkingLabel(minutes: trip.walkToStationMinutes)
-            StopRow(stop: trip.departure, label: "発")
+            StopRow(stop: trip.departure, label: "発", now: now)
             TransitBorder { Label(trip.lineName, systemImage: "tram.fill").font(.subheadline).foregroundStyle(.secondary) }
             ForEach(Array(trip.transfers.enumerated()), id: \.offset) { _, transfer in
-                TransferCard(transfer: transfer)
+                TransferCard(transfer: transfer, now: now)
                 TransitBorder {
                     Label(transfer.lineName, systemImage: "tram.fill").font(.subheadline).foregroundStyle(.secondary)
                 }
             }
-            StopRow(stop: trip.arrival, label: "着")
+            StopRow(stop: trip.arrival, label: "着", now: now)
             WalkingLabel(minutes: trip.walkToDestinationMinutes)
             HStack(alignment: .firstTextBaseline) {
-                Text(ServiceClock.time(trip.finalArrivalTime)).font(.title2.bold()).monospacedDigit()
+                Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.title2.bold()).monospacedDigit()
                 Text(destinationName).font(.headline)
                 Spacer(minLength: 0)
                 Text("到着").foregroundStyle(.secondary)
@@ -236,15 +238,16 @@ private struct DetailHeightKey: PreferenceKey {
 
 private struct TransferCard: View {
     let transfer: Transfer
+    let now: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("\(transfer.arrival.stationName)で乗り換え", systemImage: "arrow.left.arrow.right").font(.subheadline.bold())
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(ServiceClock.time(transfer.arrival.time)).font(.headline).monospacedDigit()
+                Text(ServiceClock.time(transfer.arrival.time, relativeTo: now)).font(.headline).monospacedDigit()
                 Text("着").font(.caption).foregroundStyle(.secondary)
                 Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
-                Text(ServiceClock.time(transfer.departure.time)).font(.headline).monospacedDigit()
+                Text(ServiceClock.time(transfer.departure.time, relativeTo: now)).font(.headline).monospacedDigit()
                 Text("発").font(.caption).foregroundStyle(.secondary)
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(
@@ -300,8 +303,8 @@ private struct JourneyOverview: View {
     private func endpoint(label: String, time: Date, place: String, color: Color, identifier: String?) -> some View {
         VStack(alignment: .center, spacing: 5) {
             Text(label).font(.caption.bold()).foregroundStyle(Color.ouchiGreen)
-            Text(ServiceClock.time(time)).font(.system(size: 38, weight: .bold, design: .rounded)).monospacedDigit().lineLimit(1)
-                .minimumScaleFactor(0.6).accessibilityIdentifier(identifier ?? "")
+            Text(ServiceClock.time(time, relativeTo: now)).font(.system(size: 38, weight: .bold, design: .rounded))
+                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).accessibilityIdentifier(identifier ?? "")
             Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(2)
         }.foregroundStyle(color).frame(maxWidth: .infinity, alignment: .center)
     }
@@ -310,7 +313,7 @@ private struct JourneyOverview: View {
         VStack(alignment: .center, spacing: 3) {
             HStack(spacing: 4) {
                 Image(systemName: "tram.fill").foregroundStyle(Color.ouchiGreen)
-                Text(ServiceClock.time(time)).monospacedDigit()
+                Text(ServiceClock.time(time, relativeTo: now)).monospacedDigit()
             }.font(.subheadline.bold())
             Text("\(station) \(suffix)").font(.caption).lineLimit(2)
         }.frame(maxWidth: .infinity, alignment: .center)

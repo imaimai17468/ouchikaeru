@@ -106,16 +106,14 @@ public struct RouteSummary: Codable, Equatable, Sendable {
         self.lastTrainStatus = lastTrainStatus
         self.fetchedAt = fetchedAt
     }
-    public func trip(at now: Date = Date()) -> Trip? {
-        RouteParser.recommended(upcomingTrips ?? trip.map { [$0] } ?? [], now: now)
-    }
-    public func needsRefresh(at now: Date = Date()) -> Bool { now.timeIntervalSince(fetchedAt) > 300 || trip(at: now) == nil }
-    public func isStale(at now: Date = Date()) -> Bool { trip(at: now) == nil }
+    public func trip(at now: Date) -> Trip? { RouteParser.recommended(upcomingTrips ?? trip.map { [$0] } ?? [], now: now) }
+    public func needsRefresh(at now: Date) -> Bool { now.timeIntervalSince(fetchedAt) > 300 || trip(at: now) == nil }
+    public func isStale(at now: Date) -> Bool { trip(at: now) == nil }
     public func usableLastTrain() -> Trip? {
         guard let lastTrain, RouteParser.isValidLastTrain(lastTrain, serviceDate: fetchedAt) else { return nil }
         return lastTrain
     }
-    public func lastTrainText(at now: Date = Date()) -> String {
+    public func lastTrainText(at now: Date) -> String {
         let usableLastTrain = usableLastTrain()
         if !ServiceClock.calendar.isDate(fetchedAt, inSameDayAs: now), usableLastTrain.map({ $0.leaveBy < now }) ?? true {
             return "終電情報を更新してください。"
@@ -169,7 +167,7 @@ public enum ServiceClock {
         f.dateFormat = format
         return f.string(from: date)
     }
-    public static func time(_ value: Date, relativeTo reference: Date = Date()) -> String {
+    public static func time(_ value: Date, relativeTo reference: Date) -> String {
         let days =
             calendar.dateComponents([.day], from: calendar.startOfDay(for: reference), to: calendar.startOfDay(for: value)).day
             ?? 0

@@ -185,15 +185,15 @@ private struct DetailedJourney: View {
         VStack(alignment: .leading, spacing: 5) {
             Text(title).font(.caption.bold())
             HStack(spacing: 5) {
-                Text(ServiceClock.time(isLast ? trip.leaveBy : now)).font(.title3.bold()).monospacedDigit()
+                Text(ServiceClock.time(isLast ? trip.leaveBy : now, relativeTo: now)).font(.title3.bold()).monospacedDigit()
                 Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
-                Text(ServiceClock.time(trip.finalArrivalTime)).font(.title3.bold()).monospacedDigit()
+                Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.title3.bold()).monospacedDigit()
             }.frame(maxWidth: .infinity, alignment: .center)
             Text("徒歩\(trip.walkToStationMinutes)分").font(.caption2).foregroundStyle(.secondary)
             HStack(alignment: .top, spacing: 6) {
-                WidgetRailEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発")
+                WidgetRailEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発", now: now)
                 WidgetTransferSummary(transfers: trip.transfers)
-                WidgetRailEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着")
+                WidgetRailEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着", now: now)
             }
             Text("徒歩\(trip.walkToDestinationMinutes)分 → 到着").font(.caption2).foregroundStyle(.secondary)
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -211,15 +211,15 @@ private struct FullJourney: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(title).font(.headline)
                 Spacer()
-                Text(ServiceClock.time(isLast ? trip.leaveBy : now)).font(.title2.bold()).monospacedDigit()
+                Text(ServiceClock.time(isLast ? trip.leaveBy : now, relativeTo: now)).font(.title2.bold()).monospacedDigit()
                 Image(systemName: "arrow.right").foregroundStyle(.tertiary)
-                Text(ServiceClock.time(trip.finalArrivalTime)).font(.title2.bold()).monospacedDigit()
+                Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.title2.bold()).monospacedDigit()
             }
             HStack(spacing: 8) {
                 WalkLeg(minutes: trip.walkToStationMinutes)
-                WidgetRailEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発")
+                WidgetRailEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発", now: now)
                 WidgetTransferSummary(transfers: trip.transfers)
-                WidgetRailEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着")
+                WidgetRailEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着", now: now)
                 WalkLeg(minutes: trip.walkToDestinationMinutes)
             }
             ForEach(Array(trip.transfers.enumerated()), id: \.offset) { _, transfer in
@@ -230,8 +230,8 @@ private struct FullJourney: View {
     }
 
     private func transferDescription(_ transfer: Transfer) -> String {
-        let arrival = "\(ServiceClock.time(transfer.arrival.time)) \(transfer.arrival.stationName) 着"
-        let departure = "\(ServiceClock.time(transfer.departure.time)) 発"
+        let arrival = "\(ServiceClock.time(transfer.arrival.time, relativeTo: now)) \(transfer.arrival.stationName) 着"
+        let departure = "\(ServiceClock.time(transfer.departure.time, relativeTo: now)) 発"
         return "乗換  \(arrival) → \(departure)  ·  \(transfer.lineName)"
     }
 }
@@ -281,9 +281,10 @@ private struct WidgetRailEndpoint: View {
     let time: Date
     let station: String
     let suffix: String
+    let now: Date
     var body: some View {
         VStack(alignment: .center, spacing: 2) {
-            Text(ServiceClock.time(time)).font(.caption.bold()).monospacedDigit()
+            Text(ServiceClock.time(time, relativeTo: now)).font(.caption.bold()).monospacedDigit()
             Text("\(station) \(suffix)").font(.caption2).lineLimit(2).minimumScaleFactor(0.7).multilineTextAlignment(.center)
         }.frame(maxWidth: .infinity, alignment: .center)
     }

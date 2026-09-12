@@ -54,9 +54,10 @@ struct OuchiPrimaryButtonStyle: ButtonStyle {
 struct StopRow: View {
     let stop: RouteStop
     let label: String
+    let now: Date
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(ServiceClock.time(stop.time)).font(.title2.bold()).monospacedDigit()
+            Text(ServiceClock.time(stop.time, relativeTo: now)).font(.title2.bold()).monospacedDigit()
             Text(stop.stationName).font(.headline)
             Spacer(minLength: 0)
             Text(label).foregroundStyle(.secondary)
@@ -77,10 +78,11 @@ struct LastTrainView: View {
             Label("終電", systemImage: "moon.stars.fill").font(.headline)
             Text(summary.lastTrainText(at: now)).font(.subheadline)
             if let last = summary.usableLastTrain(), last.leaveBy >= now {
-                Text("\(ServiceClock.time(last.leaveBy)) までに出発").font(.caption).foregroundStyle(.secondary)
-                Text("\(ServiceClock.time(last.arrival.time)) \(last.arrival.stationName) 着").font(.caption)
+                Text("\(ServiceClock.time(last.leaveBy, relativeTo: now)) までに出発").font(.caption).foregroundStyle(.secondary)
+                Text("\(ServiceClock.time(last.arrival.time, relativeTo: now)) \(last.arrival.stationName) 着").font(.caption)
                 WalkingLabel(minutes: last.walkToDestinationMinutes)
-                Text("\(ServiceClock.time(last.finalArrivalTime)) \(summary.destination.name) 到着").font(.subheadline.bold())
+                Text("\(ServiceClock.time(last.finalArrivalTime, relativeTo: now)) \(summary.destination.name) 到着").font(
+                    .subheadline.bold())
             }
         }
     }

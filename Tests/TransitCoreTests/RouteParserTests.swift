@@ -66,11 +66,11 @@ final class RouteParserTests: XCTestCase {
     }
     func testEmptyResponseIsNotProofLastTrainEnded() throws {
         XCTAssertTrue(try RouteParser.trips(from: response("")).isEmpty)
+        let now = Date()
         let summary = RouteSummary(
             destination: Destination(name: "自宅", coordinate: .init(latitude: 35, longitude: 139)),
-            origin: .init(latitude: 35, longitude: 140), trip: nil, lastTrain: nil, lastTrainStatus: .unavailable,
-            fetchedAt: Date())
-        XCTAssertEqual(summary.lastTrainText(), "終電情報を取得できませんでした。")
+            origin: .init(latitude: 35, longitude: 140), trip: nil, lastTrain: nil, lastTrainStatus: .unavailable, fetchedAt: now)
+        XCTAssertEqual(summary.lastTrainText(at: now), "終電情報を取得できませんでした。")
     }
     func testSnapshotRoundTripAndExpiryAtWalkingDeadline() throws {
         let trip = try XCTUnwrap(RouteParser.trips(from: response(journey())).first)
