@@ -36,6 +36,7 @@ public struct StationSearchContext: Sendable {
 public actor StationRouter {
     private let api: any StationRoutingAPI
     private let walking: any WalkingProviding
+    private let clock: WallClock
     private struct EndCache {
         let anchor: Coordinate
         let walkAnchor: Coordinate
@@ -64,9 +65,10 @@ public actor StationRouter {
     }
     private var normalPairs: PairCache?
     private var lastPairs: PairCache?
-    public init(api: any StationRoutingAPI, walking: any WalkingProviding) {
+    public init(api: any StationRoutingAPI, walking: any WalkingProviding, clock: WallClock = .system) {
         self.api = api
         self.walking = walking
+        self.clock = clock
     }
 
     public func prepare(origin: Coordinate, destination: Coordinate) async -> StationSearchContext? {
@@ -80,9 +82,10 @@ public actor StationRouter {
 
     private func resolve(at coordinate: Coordinate, isOrigin: Bool) async -> [StationAccess] {
         let cached = isOrigin ? originCache : destinationCache
+        let checkedAt = clock.now()
         // Reuse nearby station discovery, but recalculate walking after any coordinate change.
         let valid =
-            cached.map { $0.anchor.distance(to: coordinate) <= 100 && Date().timeIntervalSince($0.fetchedAt) < 3600 } ?? false
+            cached.map { $0.anchor.distance(to: coordinate) <= 100 && checkedAt.timeIntervalSince($0.fetchedAt) < 3600 } ?? false
         do {
             let stations: [StationCandidate]
             if valid, let cached { stations = cached.stations } else { stations = try await api.nearbyStations(at: coordinate) }
@@ -117,7 +120,7 @@ public actor StationRouter {
             }
             let saved = EndCache(
                 anchor: valid ? (cached?.anchor ?? coordinate) : coordinate, walkAnchor: coordinate,
-                fetchedAt: valid ? (cached?.fetchedAt ?? Date()) : Date(), stations: stations, walks: walks)
+                fetchedAt: valid ? (cached?.fetchedAt ?? checkedAt) : clock.now(), stations: stations, walks: walks)
             if isOrigin { originCache = saved } else { destinationCache = saved }
             return result
         } catch { return [] }
@@ -129,6 +132,7 @@ public actor StationRouter {
         guard origin.isWithinJapanSearchBounds, destination.isWithinJapanSearchBounds else {
             throw TransitError.outsideServiceArea
         }
+        let currentTime = clock.now()
         if last, let cached = lastCache, cached.origin == origin, cached.destination == destination,
             now.timeIntervalSince(cached.fetchedAt) >= 0, now.timeIntervalSince(cached.fetchedAt) < 600,
             ServiceClock.calendar.isDate(cached.fetchedAt, inSameDayAs: now)
@@ -139,8 +143,9 @@ public actor StationRouter {
         if let context, context.origin == origin, context.destination == destination {
             trips = await stationTrips(context, now: now, last: last)
         }
-        if trips.isEmpty || (!last && RouteParser.recommended(trips, now: Date()) == nil) {
-            trips = try await api.plan(origin: origin, destination: destination, now: last ? now : max(now, Date()), last: last)
+        if trips.isEmpty || (!last && RouteParser.recommended(trips, now: currentTime) == nil) {
+            trips = try await api.plan(
+                origin: origin, destination: destination, now: last ? now : max(now, currentTime), last: last)
             if let context { rememberPairs(trips, context: context, now: now, last: last) }
         }
         if last, !trips.isEmpty { lastCache = LastCache(origin: origin, destination: destination, fetchedAt: now, trips: trips) }
@@ -148,6 +153,7 @@ public actor StationRouter {
     }
 
     private func stationTrips(_ context: StationSearchContext, now: Date, last: Bool) async -> [Trip] {
+        let currentTime = clock.now()
         let allPairs = context.departures.flatMap { from in context.arrivals.map { (from, $0) } }
         func isReusable(_ cache: PairCache?) -> Bool {
             cache.map {
@@ -178,7 +184,7 @@ public actor StationRouter {
                 group.addTask {
                     guard from.station.id != to.station.id else { return [] }
                     do {
-                        let queryTime = max(now, Date()).addingTimeInterval(from.seconds)
+                        let queryTime = max(now, currentTime).addingTimeInterval(from.seconds)
                         // Normal searches crossing midnight must use the boarding service date.
                         let journeys = try await self.api.stationPlan(
                             from: from.station.id, to: to.station.id, boardingAfter: queryTime,

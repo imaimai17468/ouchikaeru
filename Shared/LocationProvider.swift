@@ -53,15 +53,11 @@ import CoreLocation
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) { authorize() }
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let location = locations.last, location.horizontalAccuracy >= 0 else { return }
-        // Simulator custom locations remain fixed until changed and can retain
-        // their original timestamp. Real devices must still provide a fresh fix.
         #if !targetEnvironment(simulator)
             guard abs(location.timestamp.timeIntervalSinceNow) < 120 else { return }
         #endif
         let coordinate = Coordinate(latitude: location.coordinate.latitude, longitude: location.coordinate.longitude)
         #if targetEnvironment(simulator)
-            // Ignore the simulator's default San Francisco fix while waiting for
-            // the Tokyo location configured by the run scheme.
             guard coordinate.isWithinJapanSearchBounds else { return }
         #endif
         finish(.success(coordinate))
