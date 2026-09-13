@@ -36,19 +36,26 @@ for files, *_ in specs.values():
         if path not in refs: refs[path] = add(path, 'PBXFileReference', lastKnownFileType='sourcecode.swift', path=path, sourceTree='<group>')
 asset_catalog = ROOT/'Assets.xcassets'
 asset_ref = add('Assets.xcassets', 'PBXFileReference', lastKnownFileType='folder.assetcatalog', path='Assets.xcassets', sourceTree='<group>') if asset_catalog.exists() else None
+privacy_refs = {}
+for _, _, _, _, folder in specs.values():
+    path = f'{folder}/PrivacyInfo.xcprivacy'
+    privacy_refs[folder] = add(path, 'PBXFileReference', lastKnownFileType='text.xml', path=path, sourceTree='<group>')
 products = []
 for name, (files, sdk, bundle, kind, folder) in specs.items():
     ext = 'appex' if kind == 'app-extension' else 'app'
     product = add(name+'product', 'PBXFileReference', explicitFileType='wrapper.app-extension' if ext == 'appex' else 'wrapper.application', includeInIndex=0, path=name+'.'+ext, sourceTree='BUILT_PRODUCTS_DIR')
     products.append(product)
     sources = add(name+'sources', 'PBXSourcesBuildPhase', buildActionMask=2147483647, files=[add(name+str(f), 'PBXBuildFile', fileRef=refs[str(f.relative_to(ROOT))]) for f in files], runOnlyForDeploymentPostprocessing=0)
-    resource_files = [add(name+'assets', 'PBXBuildFile', fileRef=asset_ref)] if name == 'Ouchikaeru' and asset_ref else []
+    resource_files = [add(name+'privacy', 'PBXBuildFile', fileRef=privacy_refs[folder])]
+    if name in {'Ouchikaeru', 'OuchikaeruWatch'} and asset_ref:
+        resource_files.append(add(name+'assets', 'PBXBuildFile', fileRef=asset_ref))
     resources = add(name+'resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=resource_files,runOnlyForDeploymentPostprocessing=0)
     settings = dict(PRODUCT_BUNDLE_IDENTIFIER=bundle, PRODUCT_NAME='$(TARGET_NAME)', SDKROOT=sdk, SWIFT_VERSION='5.0', GENERATE_INFOPLIST_FILE='NO', INFOPLIST_FILE='Config/'+folder+'-Info.plist', CODE_SIGN_STYLE='Automatic', TARGETED_DEVICE_FAMILY='4' if sdk == 'watchos' else '1', SKIP_INSTALL='NO' if name == 'Ouchikaeru' else 'YES', SWIFT_EMIT_LOC_STRINGS='YES')
     settings['WATCHOS_DEPLOYMENT_TARGET' if sdk == 'watchos' else 'IPHONEOS_DEPLOYMENT_TARGET'] = '10.0' if sdk == 'watchos' else '17.0'
     settings['SUPPORTED_PLATFORMS'] = 'watchos watchsimulator' if sdk == 'watchos' else 'iphoneos iphonesimulator'
     if sdk == 'iphoneos': settings['CODE_SIGN_ENTITLEMENTS'] = 'Config/AppGroup.entitlements'
-    if name == 'Ouchikaeru': settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
+    if name in {'Ouchikaeru', 'OuchikaeruWatch'}:
+        settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
     if kind == 'app-extension': settings['APPLICATION_EXTENSION_API_ONLY'] = 'YES'
     add(name, 'PBXNativeTarget', buildConfigurationList=configurations(name,settings), buildPhases=[sources,resources], buildRules=[], dependencies=[], name=name, productName=name, productReference=product, productType='com.apple.product-type.'+kind)
     info = dict(CFBundleDisplayName='オウチカエル', CFBundleExecutable='$(EXECUTABLE_NAME)', CFBundleIdentifier='$(PRODUCT_BUNDLE_IDENTIFIER)', CFBundleInfoDictionaryVersion='6.0', CFBundleName='$(PRODUCT_NAME)', CFBundlePackageType='XPC!' if kind == 'app-extension' else 'APPL', CFBundleShortVersionString='1.0', CFBundleVersion='1')
@@ -67,7 +74,7 @@ for child, dst, path in [('OuchikaeruWidget',13,''),('OuchikaeruWatch',16,'$(CON
     objects[uid('Ouchikaeru')]['buildPhases'].append(phase)
 
 product_group = add('products','PBXGroup',children=products,name='Products',sourceTree='<group>')
-main_group = add('main','PBXGroup',children=list(refs.values())+([asset_ref] if asset_ref else [])+[product_group],sourceTree='<group>')
+main_group = add('main','PBXGroup',children=list(refs.values())+list(privacy_refs.values())+([asset_ref] if asset_ref else [])+[product_group],sourceTree='<group>')
 add('project','PBXProject',attributes={'BuildIndependentTargetsInParallel':'YES','LastUpgradeCheck':'2600'},buildConfigurationList=configurations('project',{'CLANG_ENABLE_MODULES':'YES','SWIFT_VERSION':'5.0'}),compatibilityVersion='Xcode 14.0',developmentRegion='ja',hasScannedForEncodings=0,knownRegions=['ja','en','Base'],mainGroup=main_group,productRefGroup=product_group,projectDirPath='',projectRoot='',targets=[uid(n) for n in specs])
 def encode(v):
     if isinstance(v,dict): return '{\n'+'\n'.join(f'{encode(k)} = {encode(val)};' for k,val in v.items())+'\n}'
