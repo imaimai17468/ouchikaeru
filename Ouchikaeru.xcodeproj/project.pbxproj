@@ -63,6 +63,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "iphoneos";
 "SWIFT_VERSION" = "5.0";
@@ -143,6 +144,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "iphoneos";
 "SWIFT_VERSION" = "5.0";
@@ -192,6 +194,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 "SUPPORTED_PLATFORMS" = "watchos watchsimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "watchos";
 "SWIFT_VERSION" = "5.0";
@@ -473,6 +476,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-O";
 "SUPPORTED_PLATFORMS" = "watchos watchsimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "watchos";
 "SWIFT_VERSION" = "5.0";
@@ -501,6 +505,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-O";
 "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "iphoneos";
 "SWIFT_VERSION" = "5.0";
@@ -565,6 +570,7 @@
 "SWIFT_OPTIMIZATION_LEVEL" = "-O";
 "SUPPORTED_PLATFORMS" = "iphoneos iphonesimulator";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_EMIT_LOC_STRINGS" = "YES";
 "SDKROOT" = "iphoneos";
 "SWIFT_VERSION" = "5.0";
@@ -651,6 +657,7 @@
 "GENERATE_INFOPLIST_FILE" = "YES";
 "TEST_TARGET_NAME" = "Ouchikaeru";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_OPTIMIZATION_LEVEL" = "-Onone";
 };
 };
@@ -668,6 +675,7 @@
 "GENERATE_INFOPLIST_FILE" = "YES";
 "TEST_TARGET_NAME" = "Ouchikaeru";
 "CODE_SIGN_STYLE" = "Automatic";
+"DEVELOPMENT_TEAM" = "RWMY2QRJ24";
 "SWIFT_OPTIMIZATION_LEVEL" = "-O";
 };
 };

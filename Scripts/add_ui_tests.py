@@ -26,7 +26,8 @@ for config in ['Debug', 'Release']:
         PRODUCT_NAME='$(TARGET_NAME)', PRODUCT_BUNDLE_IDENTIFIER='jp.ouchikaeru.app.uitests', SDKROOT='iphoneos',
         SUPPORTED_PLATFORMS='iphoneos iphonesimulator', IPHONEOS_DEPLOYMENT_TARGET='17.0', SWIFT_VERSION='5.0',
         TARGETED_DEVICE_FAMILY='1', GENERATE_INFOPLIST_FILE='YES', TEST_TARGET_NAME='Ouchikaeru',
-        CODE_SIGN_STYLE='Automatic', SWIFT_OPTIMIZATION_LEVEL='-Onone' if config == 'Debug' else '-O')))
+        CODE_SIGN_STYLE='Automatic', DEVELOPMENT_TEAM='RWMY2QRJ24',
+        SWIFT_OPTIMIZATION_LEVEL='-Onone' if config == 'Debug' else '-O')))
 config_list = add(name + 'configs', 'XCConfigurationList', buildConfigurations=configs, defaultConfigurationIsVisible=0, defaultConfigurationName='Release')
 proxy = add(name + 'proxy', 'PBXContainerItemProxy', containerPortal=project['rootObject'], proxyType=1, remoteGlobalIDString=app_id, remoteInfo='Ouchikaeru')
 dependency = add(name + 'dependency', 'PBXTargetDependency', target=app_id, targetProxy=proxy)

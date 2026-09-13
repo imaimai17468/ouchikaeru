@@ -50,7 +50,7 @@ for name, (files, sdk, bundle, kind, folder) in specs.items():
     if name in {'Ouchikaeru', 'OuchikaeruWatch'} and asset_ref:
         resource_files.append(add(name+'assets', 'PBXBuildFile', fileRef=asset_ref))
     resources = add(name+'resources','PBXResourcesBuildPhase',buildActionMask=2147483647,files=resource_files,runOnlyForDeploymentPostprocessing=0)
-    settings = dict(PRODUCT_BUNDLE_IDENTIFIER=bundle, PRODUCT_NAME='$(TARGET_NAME)', SDKROOT=sdk, SWIFT_VERSION='5.0', GENERATE_INFOPLIST_FILE='NO', INFOPLIST_FILE='Config/'+folder+'-Info.plist', CODE_SIGN_STYLE='Automatic', TARGETED_DEVICE_FAMILY='4' if sdk == 'watchos' else '1', SKIP_INSTALL='NO' if name == 'Ouchikaeru' else 'YES', SWIFT_EMIT_LOC_STRINGS='YES')
+    settings = dict(PRODUCT_BUNDLE_IDENTIFIER=bundle, PRODUCT_NAME='$(TARGET_NAME)', SDKROOT=sdk, SWIFT_VERSION='5.0', GENERATE_INFOPLIST_FILE='NO', INFOPLIST_FILE='Config/'+folder+'-Info.plist', CODE_SIGN_STYLE='Automatic', DEVELOPMENT_TEAM='RWMY2QRJ24', TARGETED_DEVICE_FAMILY='4' if sdk == 'watchos' else '1', SKIP_INSTALL='NO' if name == 'Ouchikaeru' else 'YES', SWIFT_EMIT_LOC_STRINGS='YES')
     settings['WATCHOS_DEPLOYMENT_TARGET' if sdk == 'watchos' else 'IPHONEOS_DEPLOYMENT_TARGET'] = '10.0' if sdk == 'watchos' else '17.0'
     settings['SUPPORTED_PLATFORMS'] = 'watchos watchsimulator' if sdk == 'watchos' else 'iphoneos iphonesimulator'
     if sdk == 'iphoneos': settings['CODE_SIGN_ENTITLEMENTS'] = 'Config/AppGroup.entitlements'
