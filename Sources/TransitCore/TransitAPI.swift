@@ -126,7 +126,10 @@ public struct Place: Decodable, Identifiable, Sendable {
     public let kind: String?
     public let feedName: String?
     public var coordinate: Coordinate { Coordinate(latitude: lat, longitude: lon) }
-    public var displayName: String { name.replacingOccurrences(of: #"駅(?:\s*駅)+$"#, with: "駅", options: .regularExpression) }
+    public var displayName: String {
+        let value = kind == "station" || kind == "stop" ? StationNameFormatter.displayName(name) : name
+        return value.replacingOccurrences(of: #"駅(?:\s*駅)+$"#, with: "駅", options: .regularExpression)
+    }
     public var displayAddress: String {
         // Station metadata such as "駅 / 東日本旅客鉄道" is a search-result
         // description, not part of the destination address.
@@ -168,7 +171,7 @@ public enum PlaceSearch {
         return result
     }
     private static func samePlace(_ first: Place, _ second: Place) -> Bool {
-        guard normalized(first.name) == normalized(second.name), first.kind == second.kind else { return false }
+        guard normalized(first.displayName) == normalized(second.displayName), first.kind == second.kind else { return false }
         let radians = Double.pi / 180
         let lat = (second.lat - first.lat) * radians
         let lon = (second.lon - first.lon) * radians
@@ -232,7 +235,7 @@ public struct TransitAPI: StationRoutingAPI {
             query: [
                 "lat": String(coordinate.latitude), "lon": String(coordinate.longitude), "limit": "10", "radiusMeters": "500",
             ], timeout: 8)
-        let names = Array(Set(nearby.places.filter { $0.kind == "station" }.map(\.name))).sorted().prefix(3)
+        let names = Array(Set(nearby.places.filter { $0.kind == "station" }.map(\.displayName))).sorted().prefix(3)
         return await withTaskGroup(of: [StationCandidate].self) { group in
             for name in names {
                 group.addTask {
@@ -240,7 +243,7 @@ public struct TransitAPI: StationRoutingAPI {
                         let matches: Matches = try await self.get(
                             path: "locations/suggest", query: ["q": name, "limit": "30"], timeout: 8)
                         return matches.stations.filter {
-                            $0.kind == "station" && $0.name == name
+                            $0.kind == "station" && StationNameFormatter.displayName($0.name) == name
                                 && $0.coordinate.map { $0.isValid && $0.distance(to: coordinate) <= 750 } == true
                         }
                     } catch { return [] }

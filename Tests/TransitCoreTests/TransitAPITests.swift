@@ -71,6 +71,18 @@ final class TransitAPITests: XCTestCase {
             } catch { guard case TransitError.outsideServiceArea = error else { return XCTFail("Unexpected error: \(error)") } }
         }
     }
+    func testNearbyStationSearchUsesJapaneseDisplayName() async throws {
+        TransitStub.handler = { request in
+            if request.url?.path.contains("places/reverse") == true {
+                return Data(#"{"places":[{"id":"nearby","name":"長原Nagahara","kind":"station","lat":35.602,"lon":139.697}]}"#.utf8)
+            }
+            XCTAssertEqual(try queryParameters(from: request)["q"], "長原")
+            return Data(
+                #"{"stations":[{"id":"feed:nagahara","name":"長原Nagahara","kind":"station","lat":35.602,"lon":139.697}]}"#.utf8)
+        }
+        let stations = try await client().nearbyStations(at: .init(latitude: 35.602, longitude: 139.697))
+        XCTAssertEqual(stations.map(\.id), ["feed:nagahara"])
+    }
 }
 
 private class TransitStub: URLProtocol {

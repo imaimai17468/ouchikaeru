@@ -1,5 +1,14 @@
 import Foundation
 
+enum StationNameFormatter {
+    static func displayName(_ value: String) -> String {
+        value.replacingOccurrences(
+            of: #"(?<=[\p{Hiragana}\p{Katakana}\p{Han}々ヶ])\s*[A-Za-z][A-Za-z .'-]*[A-Za-z]$"#, with: "",
+            options: .regularExpression
+        ).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
+
 public struct Coordinate: Codable, Equatable, Sendable {
     public var latitude: Double
     public var longitude: Double
@@ -64,6 +73,21 @@ public struct RouteStop: Codable, Equatable, Sendable {
     public var stationName: String
     public var time: Date
     public var stationID: String?
+
+    public init(stationName: String, time: Date, stationID: String? = nil) {
+        self.stationName = StationNameFormatter.displayName(stationName)
+        self.time = time
+        self.stationID = stationID
+    }
+
+    private enum CodingKeys: String, CodingKey { case stationName, time, stationID }
+
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        stationName = StationNameFormatter.displayName(try values.decode(String.self, forKey: .stationName))
+        time = try values.decode(Date.self, forKey: .time)
+        stationID = try values.decodeIfPresent(String.self, forKey: .stationID)
+    }
 }
 
 public struct Transfer: Codable, Equatable, Sendable {

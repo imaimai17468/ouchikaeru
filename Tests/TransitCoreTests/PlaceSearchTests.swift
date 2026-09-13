@@ -39,6 +39,20 @@ final class PlaceSearchTests: XCTestCase {
         XCTAssertEqual(place.displayAddress, "千葉駅")
         XCTAssertEqual(place.subtitle, "東日本旅客鉄道")
     }
+    func testStationDisplayRemovesAppendedRomanization() {
+        let place = Place(id: "nagahara", name: "長原Nagahara", lat: 35.602, lon: 139.697, kind: "station")
+        XCTAssertEqual(place.displayName, "長原")
+    }
+    func testJapaneseAndRomanizedStationResultsMerge() throws {
+        let result = PlaceSearch.unique([
+            try place("romanized", name: "長原Nagahara"), try place("japanese", name: "長原", lat: 35.5604, feed: "池上線"),
+        ])
+        XCTAssertEqual(result.map(\.id), ["japanese"])
+    }
+    func testFacilityDisplayKeepsLatinSuffix() {
+        let place = Place(id: "facility", name: "長原Nagahara", lat: 35.602, lon: 139.697, kind: "place")
+        XCTAssertEqual(place.displayName, "長原Nagahara")
+    }
     func testLegacySavedStationMetadataIsRemoved() {
         let destination = Destination(
             name: "千葉駅 駅 / 東日本旅客鉄道", address: "千葉駅 駅 / 東日本旅客鉄道", coordinate: .init(latitude: 35.613, longitude: 140.113)

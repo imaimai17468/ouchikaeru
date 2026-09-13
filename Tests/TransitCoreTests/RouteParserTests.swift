@@ -54,6 +54,19 @@ final class RouteParserTests: XCTestCase {
         XCTAssertEqual(trip.transfers[0].arrival.stationName, "乗換A")
         XCTAssertEqual(trip.transfers[0].departure.stationName, "乗換B")
     }
+    func testRouteStopsRemoveAppendedRomanization() throws {
+        let trip = try XCTUnwrap(
+            RouteParser.trips(
+                from: response(
+                    journey().replacingOccurrences(of: "東京", with: "長原Nagahara").replacingOccurrences(
+                        of: "東金", with: "洗足池Senzoku-ike"))
+            ).first)
+        XCTAssertEqual([trip.departure.stationName, trip.arrival.stationName], ["長原", "洗足池"])
+    }
+    func testCachedRouteStopRemovesAppendedRomanization() throws {
+        let stop = try JSONDecoder().decode(RouteStop.self, from: Data(#"{"stationName":"長原Nagahara","time":0}"#.utf8))
+        XCTAssertEqual(stop.stationName, "長原")
+    }
     func testTrailingStationWalkIsIncludedInDestinationWalk() throws {
         let json = """
             {"departureSecs":36000,"arrivalSecs":37400,"accessWalkSecs":60,"egressWalkSecs":100,"legs":[
