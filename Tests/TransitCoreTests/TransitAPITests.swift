@@ -78,10 +78,12 @@ final class TransitAPITests: XCTestCase {
             }
             XCTAssertEqual(try queryParameters(from: request)["q"], "長原")
             return Data(
-                #"{"stations":[{"id":"feed:nagahara","name":"長原Nagahara","kind":"station","lat":35.602,"lon":139.697}]}"#.utf8)
+                #"{"stations":[{"id":"feed:nagahara","name":"長原Nagahara","kind":"station","lat":35.602,"lon":139.697,"weight":42}]}"#
+                    .utf8)
         }
         let stations = try await client().nearbyStations(at: .init(latitude: 35.602, longitude: 139.697))
         XCTAssertEqual(stations.map(\.id), ["feed:nagahara"])
+        XCTAssertEqual(stations.first?.weight, 42)
     }
 }
 

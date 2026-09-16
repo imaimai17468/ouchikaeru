@@ -235,7 +235,11 @@ public struct TransitAPI: StationRoutingAPI {
             query: [
                 "lat": String(coordinate.latitude), "lon": String(coordinate.longitude), "limit": "10", "radiusMeters": "500",
             ], timeout: 8)
-        let names = Array(Set(nearby.places.filter { $0.kind == "station" }.map(\.displayName))).sorted().prefix(3)
+        var seenNames = Set<String>()
+        let names = nearby.places.compactMap { place -> String? in
+            guard place.kind == "station", seenNames.insert(place.displayName).inserted else { return nil }
+            return place.displayName
+        }.prefix(3)
         return await withTaskGroup(of: [StationCandidate].self) { group in
             for name in names {
                 group.addTask {
@@ -252,7 +256,12 @@ public struct TransitAPI: StationRoutingAPI {
             var found: [StationCandidate] = []
             for await stations in group { found += stations }
             var ids = Set<String>()
-            return found.filter { ids.insert($0.id).inserted }.sorted { $0.id < $1.id }
+            return found.filter { ids.insert($0.id).inserted }.sorted { lhs, rhs in
+                let leftWeight = lhs.weight ?? 0
+                let rightWeight = rhs.weight ?? 0
+                if leftWeight != rightWeight { return leftWeight > rightWeight }
+                return lhs.id < rhs.id
+            }
         }
     }
     public func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {

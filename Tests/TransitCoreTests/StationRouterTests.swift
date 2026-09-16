@@ -6,17 +6,18 @@ final class StationRouterTests: XCTestCase {
     private let origin = Coordinate(latitude: 35, longitude: 139)
     private let destination = Coordinate(latitude: 36, longitude: 140)
 
-    func testStationSearchIncludesWalkAndComparesMultipleFeedIDs() async throws {
+    func testStationSearchUsesHighestWeightIDForNearestPhysicalStation() async throws {
         let api = StationAPIStub(), walks = WalkingStub()
         let router = StationRouter(api: api, walking: walks)
         let context = await router.prepare(origin: origin, destination: destination)
-        XCTAssertEqual(context?.departures.count, 2)
+        XCTAssertEqual(context?.departures.count, 1)
+        XCTAssertEqual(context?.departures.first?.station.id, "feed:b")
         let start = Date()
         let trips = try await router.plan(origin: origin, destination: destination, context: context, now: start, last: false)
         let calls = await api.requests
-        XCTAssertEqual(Set(calls.map(\.from)), ["feed:a", "feed:b"])
+        XCTAssertEqual(calls.map(\.from), ["feed:b"])
         XCTAssertTrue(calls.allSatisfy { $0.boardingAfter.timeIntervalSince(start) >= 180 })
-        XCTAssertEqual(trips.count, 2)
+        XCTAssertEqual(trips.count, 1)
         XCTAssertTrue(trips.allSatisfy { $0.walkToStationMinutes == 3 && $0.walkToDestinationMinutes == 2 })
         let fallback = await api.fallbackCount
         XCTAssertEqual(fallback, 0)
@@ -31,7 +32,7 @@ final class StationRouterTests: XCTestCase {
         _ = await router.prepare(origin: origin, destination: destination)
         let firstCount = await walks.count
         let firstDiscoveries = await api.discoveryCount
-        XCTAssertEqual(firstCount, 2)  // Two departure feed IDs share the same physical coordinate.
+        XCTAssertEqual(firstCount, 2)
         XCTAssertEqual(firstDiscoveries, 2)
         _ = await router.prepare(origin: .init(latitude: 35.0001, longitude: 139), destination: destination)
         let nextWalks = await walks.count
@@ -89,7 +90,7 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(earlierJourney.walkToDestinationMinutes, 10)
     }
 
-    func testActualBoardingIDsAreReusedThenRecomparedAfterFiveMinutes() async throws {
+    func testNearestStationUsesOneRequestAcrossRefreshes() async throws {
         let api = StationAPIStub()
         let router = StationRouter(api: api, walking: WalkingStub())
         let context = await router.prepare(origin: origin, destination: destination)
@@ -98,12 +99,12 @@ final class StationRouterTests: XCTestCase {
         _ = try await router.plan(
             origin: origin, destination: destination, context: context, now: now.addingTimeInterval(1), last: false)
         let reused = await api.requests
-        XCTAssertEqual(reused.count, 3)
+        XCTAssertEqual(reused.count, 2)
         XCTAssertEqual(reused.last?.from, "feed:b")
         _ = try await router.plan(
             origin: origin, destination: destination, context: context, now: now.addingTimeInterval(301), last: false)
         let expanded = await api.requests
-        XCTAssertEqual(expanded.count, 5)
+        XCTAssertEqual(expanded.count, 3)
     }
 
     func testLastTrainReusesPairSelectedByNormalRoute() async throws {
@@ -161,8 +162,8 @@ final class StationRouterTests: XCTestCase {
         XCTAssertTrue(requests.allSatisfy { ServiceClock.calendar.isDate($0.serviceDate, inSameDayAs: $0.boardingAfter) })
     }
 
-    func testPartialStationFailureFallsBackAndReusesValidatedBoardingPair() async throws {
-        let api = StationAPIStub(failingStation: "feed:a")
+    func testRepresentativeStationFailureFallsBackOnEachAttempt() async throws {
+        let api = StationAPIStub(failingStation: "feed:b")
         let router = StationRouter(api: api, walking: WalkingStub())
         let context = await router.prepare(origin: origin, destination: destination)
         let now = Date()
@@ -175,7 +176,7 @@ final class StationRouterTests: XCTestCase {
         let requests = await api.requests
         XCTAssertEqual(requests.last?.from, "feed:b")
         let nextFallbackCount = await api.fallbackCount
-        XCTAssertEqual(nextFallbackCount, 1)
+        XCTAssertEqual(nextFallbackCount, 2)
     }
 }
 
@@ -216,9 +217,13 @@ private actor StationAPIStub: StationRoutingAPI {
         discoveryCount += 1
         if emptyStations { return [] }
         if coordinate.latitude < 35.5 {
-            return ["feed:a", "feed:b"].map { StationCandidate(id: $0, name: "東京", lat: 35.001, lon: 139, kind: "station") }
+            return [
+                StationCandidate(id: "feed:a", name: "東京", lat: 35.001, lon: 139, kind: "station", weight: 10),
+                StationCandidate(id: "feed:b", name: "東京", lat: 35.001, lon: 139, kind: "station", weight: 20),
+                StationCandidate(id: "feed:far", name: "遠駅", lat: 35.01, lon: 139, kind: "station", weight: 100),
+            ]
         }
-        return [StationCandidate(id: "feed:c", name: "東金", lat: 36.001, lon: 140, kind: "station")]
+        return [StationCandidate(id: "feed:c", name: "東金", lat: 36.001, lon: 140, kind: "station", weight: 20)]
     }
     func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {
         requests.append(Request(from: from, boardingAfter: boardingAfter, serviceDate: serviceDate, last: last))

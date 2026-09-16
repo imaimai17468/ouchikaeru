@@ -6,6 +6,17 @@ public struct StationCandidate: Codable, Equatable, Sendable {
     public let lat: Double?
     public let lon: Double?
     public let kind: String?
+    public let weight: Double?
+
+    public init(id: String, name: String, lat: Double?, lon: Double?, kind: String?, weight: Double? = nil) {
+        self.id = id
+        self.name = name
+        self.lat = lat
+        self.lon = lon
+        self.kind = kind
+        self.weight = weight
+    }
+
     public var coordinate: Coordinate? {
         guard let lat, let lon else { return nil }
         return Coordinate(latitude: lat, longitude: lon)
@@ -73,6 +84,11 @@ public actor StationRouter {
         let fetchedAt: Date
         let pairs: [PairKey]
     }
+    private struct LocatedStation {
+        let station: StationCandidate
+        let coordinate: Coordinate
+        let name: String
+    }
     private var normalPairs: PairCache?
     private var lastPairs: PairCache?
     public init(api: any StationRoutingAPI, walking: any WalkingProviding, clock: WallClock = .system) {
@@ -100,15 +116,13 @@ public actor StationRouter {
         do {
             let stations: [StationCandidate]
             if valid, let cached { stations = cached.stations } else { stations = try await api.nearbyStations(at: coordinate) }
-            guard !stations.isEmpty, stations.count <= 30 else { return [] }
+            guard !stations.isEmpty, stations.count <= 30, let station = nearestRepresentative(in: stations, to: coordinate)
+            else { return [] }
             let canReuseWalks = valid && cached.map { $0.walkAnchor.distance(to: coordinate) <= 50 } == true
             var walks = canReuseWalks ? (cached?.walks ?? [:]) : [:]
             var result: [StationAccess] = []
-            // Feed-specific station IDs can share coordinates: calculate that walk only once.
             var missing: [String: Coordinate] = [:]
-            for station in stations {
-                if let point = station.coordinate, point.isValid, walks[point.endpoint] == nil { missing[point.endpoint] = point }
-            }
+            if let point = station.coordinate, point.isValid, walks[point.endpoint] == nil { missing[point.endpoint] = point }
             let resolved = await withTaskGroup(of: (String, TimeInterval?).self) { group in
                 for (key, point) in missing {
                     group.addTask {
@@ -122,13 +136,13 @@ public actor StationRouter {
                 return values
             }
             walks.merge(resolved) { _, new in new }
-            for station in stations {
-                guard let point = station.coordinate else { continue }
+            if let point = station.coordinate {
                 let key = point.endpoint
-                guard let seconds = walks[key], seconds.isFinite, seconds >= 0, seconds <= 1800 else { continue }
-                // Round up to a whole minute and allow another minute to reach the platform.
-                let padded = ceil(seconds / 60) * 60 + (isOrigin ? 60 : 0)
-                result.append(StationAccess(station: station, seconds: padded))
+                if let seconds = walks[key], seconds.isFinite, seconds >= 0, seconds <= 1800 {
+                    // Round up to a whole minute and allow another minute to reach the platform.
+                    let padded = ceil(seconds / 60) * 60 + (isOrigin ? 60 : 0)
+                    result.append(StationAccess(station: station, seconds: padded))
+                }
             }
             let saved = EndCache(
                 anchor: valid ? (cached?.anchor ?? coordinate) : coordinate, walkAnchor: coordinate,
@@ -136,6 +150,28 @@ public actor StationRouter {
             if isOrigin { originCache = saved } else { destinationCache = saved }
             return result
         } catch { return [] }
+    }
+
+    private func nearestRepresentative(in stations: [StationCandidate], to coordinate: Coordinate) -> StationCandidate? {
+        let valid = stations.compactMap { station -> LocatedStation? in
+            guard let point = station.coordinate, point.isValid else { return nil }
+            return LocatedStation(station: station, coordinate: point, name: StationNameFormatter.displayName(station.name))
+        }
+        guard
+            let nearest = valid.min(by: { lhs, rhs in
+                let leftDistance = lhs.coordinate.distance(to: coordinate)
+                let rightDistance = rhs.coordinate.distance(to: coordinate)
+                if leftDistance != rightDistance { return leftDistance < rightDistance }
+                if lhs.name != rhs.name { return lhs.name < rhs.name }
+                return lhs.station.id < rhs.station.id
+            })
+        else { return nil }
+        return valid.filter { $0.name == nearest.name }.map(\.station).min { lhs, rhs in
+            let leftWeight = lhs.weight ?? 0
+            let rightWeight = rhs.weight ?? 0
+            if leftWeight != rightWeight { return leftWeight > rightWeight }
+            return lhs.id < rhs.id
+        }
     }
 
     public func plan(
