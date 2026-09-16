@@ -42,8 +42,10 @@ public actor RoutePlanner: RoutePlanning {
         origin: Coordinate, destination: Destination, context: StationSearchContext?, previous: RouteSummary?, now: Date
     ) async throws -> CurrentRoutePlan {
         let retainedLastTrain = reusableLastTrain(in: previous, origin: origin, destination: destination, now: now)
+        let preferredPair = reusableStationPair(in: previous, origin: origin, destination: destination)
         let trips = try await planWithRetry(
-            origin: origin, destination: destination.coordinate, context: context, now: now, last: false)
+            origin: origin, destination: destination.coordinate, context: context, now: now, last: false,
+            preferredPair: preferredPair)
         let fetchedAt = clock.now()
         let selected = RouteParser.recommended(trips, now: fetchedAt)
         let summary = RouteSummary(
@@ -80,15 +82,26 @@ public actor RoutePlanner: RoutePlanning {
         return lastTrain
     }
 
-    private func planWithRetry(origin: Coordinate, destination: Coordinate, context: StationSearchContext?, now: Date, last: Bool)
-        async throws -> [Trip]
-    {
+    private func reusableStationPair(in summary: RouteSummary?, origin: Coordinate, destination: Destination) -> StationPair? {
+        guard let summary, summary.destination.id == destination.id, summary.destination.coordinate == destination.coordinate,
+            summary.origin.distance(to: origin) <= 150, let from = summary.trip?.departure.stationID,
+            let to = summary.trip?.arrival.stationID
+        else { return nil }
+        return StationPair(from: from, to: to)
+    }
+
+    private func planWithRetry(
+        origin: Coordinate, destination: Coordinate, context: StationSearchContext?, now: Date, last: Bool,
+        preferredPair: StationPair? = nil
+    ) async throws -> [Trip] {
         do {
-            return try await router.plan(origin: origin, destination: destination, context: context, now: now, last: last)
+            return try await router.plan(
+                origin: origin, destination: destination, context: context, now: now, last: last, preferredPair: preferredPair)
         } catch let error as TransitError {
             guard case .timedOut = error else { throw error }
             try await Task.sleep(for: .milliseconds(250))
-            return try await router.plan(origin: origin, destination: destination, context: context, now: now, last: last)
+            return try await router.plan(
+                origin: origin, destination: destination, context: context, now: now, last: last, preferredPair: preferredPair)
         }
     }
 }

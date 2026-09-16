@@ -115,6 +115,22 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(requests.last?.last, true)
     }
 
+    func testPersistedPairAvoidsComparingEveryFeedAfterRelaunch() async throws {
+        let api = StationAPIStub()
+        let router = StationRouter(api: api, walking: WalkingStub())
+        let context = await router.prepare(origin: origin, destination: destination)
+        let now = Date()
+
+        let trips = try await router.plan(
+            origin: origin, destination: destination, context: context, now: now, last: false,
+            preferredPair: StationPair(from: "feed:b", to: "feed:c"))
+
+        let requests = await api.requests
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.from, "feed:b")
+        XCTAssertEqual(trips.first?.lineName, "feed:b")
+    }
+
     func testBoardingAfterMidnightUsesNextServiceDate() async throws {
         let api = StationAPIStub()
         let router = StationRouter(api: api, walking: WalkingStub())

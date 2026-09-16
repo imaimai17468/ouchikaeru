@@ -31,6 +31,31 @@ final class RoutePlannerTests: XCTestCase {
         XCTAssertEqual(requestCount, 2)
     }
 
+    func testCurrentRouteReusesStationPairFromSavedSummary() async throws {
+        let fixture = fixture()
+        var savedTrip = fixture.currentTrip
+        savedTrip.departure.stationID = "feed:b"
+        savedTrip.arrival.stationID = "feed:c"
+        let previous = RouteSummary(
+            destination: fixture.destination, origin: fixture.origin, trip: savedTrip, lastTrain: nil,
+            lastTrainStatus: .unavailable, fetchedAt: fixture.now.addingTimeInterval(-600))
+        let context = StationSearchContext(
+            origin: fixture.origin, destination: fixture.destination.coordinate,
+            departures: [
+                StationAccess(station: station(id: "feed:a"), seconds: 0),
+                StationAccess(station: station(id: "feed:b"), seconds: 0),
+            ], arrivals: [StationAccess(station: station(id: "feed:c"), seconds: 0)])
+
+        _ = try await fixture.planner.currentRoute(
+            origin: fixture.origin, destination: fixture.destination, context: context, previous: previous, now: fixture.now)
+
+        let requests = await fixture.api.stationRequests
+        XCTAssertEqual(requests.map(\.from), ["feed:b"])
+        XCTAssertEqual(requests.map(\.to), ["feed:c"])
+        let coordinateRequests = await fixture.api.currentRequestCount
+        XCTAssertEqual(coordinateRequests, 0)
+    }
+
     func testAddingLastTrainUsesLatestResult() async throws {
         let fixture = fixture()
         let plan = try await fixture.planner.currentRoute(
@@ -79,6 +104,10 @@ final class RoutePlannerTests: XCTestCase {
             arrival: RouteStop(stationName: "到着", time: arrival), walkToDestinationMinutes: 5,
             finalArrivalTime: arrival.addingTimeInterval(300), leaveBy: departure.addingTimeInterval(-300), lineName: "路線")
     }
+
+    private func station(id: String) -> StationCandidate {
+        StationCandidate(id: id, name: id, lat: 35.65, lon: 139.75, kind: "station")
+    }
 }
 
 private struct PlannerFixture {
@@ -92,11 +121,17 @@ private struct PlannerFixture {
 }
 
 private actor PlannerAPI: StationRoutingAPI {
+    struct StationRequest: Sendable {
+        let from: String
+        let to: String
+    }
+
     let current: [Trip]
     let last: [Trip]
     let timesOutOnce: Bool
     let lastFails: Bool
     private(set) var currentRequestCount = 0
+    private(set) var stationRequests: [StationRequest] = []
 
     init(current: [Trip], last: [Trip], timesOutOnce: Bool = false, lastFails: Bool = false) {
         self.current = current
@@ -106,7 +141,10 @@ private actor PlannerAPI: StationRoutingAPI {
     }
 
     func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] { [] }
-    func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] { [] }
+    func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {
+        stationRequests.append(StationRequest(from: from, to: to))
+        return current
+    }
     func plan(origin: Coordinate, destination: Coordinate, now: Date, last: Bool) async throws -> [Trip] {
         if last {
             if lastFails { throw PlannerFailure.failed }

@@ -32,6 +32,16 @@ public struct StationSearchContext: Sendable {
     public let arrivals: [StationAccess]
 }
 
+public struct StationPair: Equatable, Sendable {
+    public let from: String
+    public let to: String
+
+    public init(from: String, to: String) {
+        self.from = from
+        self.to = to
+    }
+}
+
 /// Holds only the current origin/destination station and walking data, never a location history.
 public actor StationRouter {
     private let api: any StationRoutingAPI
@@ -126,9 +136,10 @@ public actor StationRouter {
         } catch { return [] }
     }
 
-    public func plan(origin: Coordinate, destination: Coordinate, context: StationSearchContext?, now: Date, last: Bool)
-        async throws -> [Trip]
-    {
+    public func plan(
+        origin: Coordinate, destination: Coordinate, context: StationSearchContext?, now: Date, last: Bool,
+        preferredPair: StationPair? = nil
+    ) async throws -> [Trip] {
         guard origin.isWithinJapanSearchBounds, destination.isWithinJapanSearchBounds else {
             throw TransitError.outsideServiceArea
         }
@@ -141,7 +152,7 @@ public actor StationRouter {
         }
         var trips: [Trip] = []
         if let context, context.origin == origin, context.destination == destination {
-            trips = await stationTrips(context, now: now, last: last)
+            trips = await stationTrips(context, now: now, last: last, preferred: preferredPair)
         }
         if trips.isEmpty || (!last && RouteParser.recommended(trips, now: currentTime) == nil) {
             trips = try await api.plan(
@@ -152,7 +163,7 @@ public actor StationRouter {
         return trips
     }
 
-    private func stationTrips(_ context: StationSearchContext, now: Date, last: Bool) async -> [Trip] {
+    private func stationTrips(_ context: StationSearchContext, now: Date, last: Bool, preferred: StationPair?) async -> [Trip] {
         let currentTime = clock.now()
         let allPairs = context.departures.flatMap { from in context.arrivals.map { (from, $0) } }
         func isReusable(_ cache: PairCache?) -> Bool {
@@ -161,6 +172,18 @@ public actor StationRouter {
                     && now.timeIntervalSince($0.fetchedAt) < 300 && ServiceClock.calendar.isDate($0.fetchedAt, inSameDayAs: now)
             } ?? false
         }
+        // Try a pair retained in the persisted route before comparing every
+        // feed-specific ID again after an app launch.
+        let persisted =
+            preferred.map { pair in allPairs.filter { $0.0.station.id == pair.from && $0.1.station.id == pair.to } } ?? []
+        if !persisted.isEmpty {
+            let result = await search(persisted, now: now, currentTime: currentTime, last: last)
+            if hasUsableTrip(result, now: currentTime, last: last) {
+                rememberPairs(result, context: context, now: now, last: last)
+                return result
+            }
+        }
+
         // A normal route has already selected a practical station pair. The
         // same pair is the best first choice for the last-train lookup.
         let cache = last && isReusable(lastPairs) ? lastPairs : normalPairs
@@ -170,7 +193,13 @@ public actor StationRouter {
             reusable
             ? allPairs.filter { from, to in cachedPairs.contains(PairKey(from: from.station.id, to: to.station.id)) } : []
         let pairs = preferred.isEmpty ? allPairs : preferred
-        let result: [Trip] = await withTaskGroup(of: [Trip]?.self) { group in
+        let result = await search(pairs, now: now, currentTime: currentTime, last: last)
+        if preferred.isEmpty { rememberPairs(result, context: context, now: now, last: last) }
+        return result
+    }
+
+    private func search(_ pairs: [(StationAccess, StationAccess)], now: Date, currentTime: Date, last: Bool) async -> [Trip] {
+        await withTaskGroup(of: [Trip]?.self) { group in
             // A slow pair must not turn 36 bounded requests into a multi-minute wait.
             group.addTask {
                 do {
@@ -223,8 +252,11 @@ public actor StationRouter {
             }
             return result
         }
-        if preferred.isEmpty { rememberPairs(result, context: context, now: now, last: last) }
-        return result
+    }
+
+    private func hasUsableTrip(_ trips: [Trip], now: Date, last: Bool) -> Bool {
+        if last { return !trips.isEmpty }
+        return RouteParser.recommended(trips, now: now) != nil
     }
 
     private func rememberPairs(_ trips: [Trip], context: StationSearchContext, now: Date, last: Bool) {
