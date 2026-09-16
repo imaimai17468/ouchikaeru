@@ -24,7 +24,7 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(best.lineName, "feed:b")
     }
 
-    func testWalkingCacheSharesCoordinatesButRecalculatesAfterMovement() async throws {
+    func testWalkingCacheToleratesGPSDriftButRecalculatesAfterMovement() async throws {
         let api = StationAPIStub(), walks = WalkingStub()
         let router = StationRouter(api: api, walking: walks)
         _ = await router.prepare(origin: origin, destination: destination)
@@ -36,8 +36,13 @@ final class StationRouterTests: XCTestCase {
         _ = await router.prepare(origin: .init(latitude: 35.0001, longitude: 139), destination: destination)
         let nextWalks = await walks.count
         let nextDiscoveries = await api.discoveryCount
-        XCTAssertEqual(nextWalks, 3)
+        XCTAssertEqual(nextWalks, 2)
         XCTAssertEqual(nextDiscoveries, 2)
+        _ = await router.prepare(origin: .init(latitude: 35.0006, longitude: 139), destination: destination)
+        let movedWalks = await walks.count
+        let reusedDiscoveries = await api.discoveryCount
+        XCTAssertEqual(movedWalks, 3)
+        XCTAssertEqual(reusedDiscoveries, 2)
         _ = await router.prepare(origin: .init(latitude: 35.01, longitude: 139), destination: destination)
         let movedDiscoveries = await api.discoveryCount
         XCTAssertEqual(movedDiscoveries, 3)
@@ -131,6 +136,18 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(trips.first?.lineName, "feed:b")
     }
 
+    func testCoordinateFallbackOverlapsSlowStationComparison() async throws {
+        let api = StationAPIStub(stationDelay: .seconds(2))
+        let router = StationRouter(api: api, walking: WalkingStub())
+        let context = await router.prepare(origin: origin, destination: destination)
+        let start = ContinuousClock.now
+
+        let trips = try await router.plan(origin: origin, destination: destination, context: context, now: Date(), last: false)
+
+        XCTAssertEqual(trips.first?.lineName, "coordinate")
+        XCTAssertLessThan(start.duration(to: .now), .seconds(1))
+    }
+
     func testBoardingAfterMidnightUsesNextServiceDate() async throws {
         let api = StationAPIStub()
         let router = StationRouter(api: api, walking: WalkingStub())
@@ -189,9 +206,11 @@ private actor StationAPIStub: StationRoutingAPI {
     var discoveryCount = 0
     let emptyStations: Bool
     let failingStation: String?
-    init(emptyStations: Bool = false, failingStation: String? = nil) {
+    let stationDelay: Duration?
+    init(emptyStations: Bool = false, failingStation: String? = nil, stationDelay: Duration? = nil) {
         self.emptyStations = emptyStations
         self.failingStation = failingStation
+        self.stationDelay = stationDelay
     }
     func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] {
         discoveryCount += 1
@@ -203,6 +222,7 @@ private actor StationAPIStub: StationRoutingAPI {
     }
     func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {
         requests.append(Request(from: from, boardingAfter: boardingAfter, serviceDate: serviceDate, last: last))
+        if let stationDelay { try await Task.sleep(for: stationDelay) }
         if from == failingStation { throw TransitError.timedOut }
         var trip = fixture(departure: boardingAfter.addingTimeInterval(120), duration: from == "feed:a" ? 900 : 600, line: from)
         trip.departure.stationID = "feed:b"

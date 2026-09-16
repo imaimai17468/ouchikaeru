@@ -93,14 +93,16 @@ public actor StationRouter {
     private func resolve(at coordinate: Coordinate, isOrigin: Bool) async -> [StationAccess] {
         let cached = isOrigin ? originCache : destinationCache
         let checkedAt = clock.now()
-        // Reuse nearby station discovery, but recalculate walking after any coordinate change.
+        // GPS readings commonly drift by a few meters while the user is stationary. The
+        // rounded walking allowance is stable within this range, so avoid repeating MapKit work.
         let valid =
             cached.map { $0.anchor.distance(to: coordinate) <= 100 && checkedAt.timeIntervalSince($0.fetchedAt) < 3600 } ?? false
         do {
             let stations: [StationCandidate]
             if valid, let cached { stations = cached.stations } else { stations = try await api.nearbyStations(at: coordinate) }
             guard !stations.isEmpty, stations.count <= 30 else { return [] }
-            var walks = valid && cached?.walkAnchor == coordinate ? (cached?.walks ?? [:]) : [:]
+            let canReuseWalks = valid && cached.map { $0.walkAnchor.distance(to: coordinate) <= 50 } == true
+            var walks = canReuseWalks ? (cached?.walks ?? [:]) : [:]
             var result: [StationAccess] = []
             // Feed-specific station IDs can share coordinates: calculate that walk only once.
             var missing: [String: Coordinate] = [:]
@@ -152,7 +154,20 @@ public actor StationRouter {
         }
         var trips: [Trip] = []
         if let context, context.origin == origin, context.destination == destination {
-            trips = await stationTrips(context, now: now, last: last, preferred: preferredPair)
+            if let pair = matching(preferredPair, in: context) {
+                let preferred = await search(pair, now: now, currentTime: currentTime, last: last, timeout: .seconds(2))
+                if hasUsableTrip(preferred, now: currentTime, last: last) {
+                    rememberPairs(preferred, context: context, now: now, last: last)
+                    trips = preferred
+                }
+            }
+            if trips.isEmpty {
+                if last {
+                    trips = await stationTrips(context, now: now, last: true)
+                } else {
+                    trips = try await fastestPlan(origin: origin, destination: destination, context: context, now: now)
+                }
+            }
         }
         if trips.isEmpty || (!last && RouteParser.recommended(trips, now: currentTime) == nil) {
             trips = try await api.plan(
@@ -163,7 +178,55 @@ public actor StationRouter {
         return trips
     }
 
-    private func stationTrips(_ context: StationSearchContext, now: Date, last: Bool, preferred: StationPair?) async -> [Trip] {
+    private func matching(_ pair: StationPair?, in context: StationSearchContext) -> [(StationAccess, StationAccess)]? {
+        guard let pair else { return nil }
+        let matches = context.departures.flatMap { from in
+            context.arrivals.compactMap { to in from.station.id == pair.from && to.station.id == pair.to ? (from, to) : nil }
+        }
+        return matches.isEmpty ? nil : matches
+    }
+
+    private func fastestPlan(origin: Coordinate, destination: Coordinate, context: StationSearchContext, now: Date) async throws
+        -> [Trip]
+    {
+        enum Attempt: Sendable {
+            case station([Trip])
+            case coordinate(Result<[Trip], Error>)
+        }
+        let currentTime = clock.now()
+        return try await withThrowingTaskGroup(of: Attempt.self) { group in
+            group.addTask { .station(await self.stationTrips(context, now: now, last: false)) }
+            group.addTask {
+                do {
+                    // Give the inexpensive station-ID plan a short head start. Slow
+                    // comparisons then overlap the coordinate fallback instead of blocking it.
+                    try await Task.sleep(for: .milliseconds(400))
+                    let trips = try await self.api.plan(
+                        origin: origin, destination: destination, now: max(now, currentTime), last: false)
+                    return .coordinate(.success(trips))
+                } catch { return .coordinate(.failure(error)) }
+            }
+            var coordinateError: Error?
+            for try await attempt in group {
+                switch attempt {
+                case .station(let trips):
+                    guard hasUsableTrip(trips, now: currentTime, last: false) else { continue }
+                    group.cancelAll()
+                    return trips
+                case .coordinate(.success(let trips)):
+                    guard hasUsableTrip(trips, now: currentTime, last: false) else { continue }
+                    rememberPairs(trips, context: context, now: now, last: false)
+                    group.cancelAll()
+                    return trips
+                case .coordinate(.failure(let error)): coordinateError = error
+                }
+            }
+            if let coordinateError { throw coordinateError }
+            return []
+        }
+    }
+
+    private func stationTrips(_ context: StationSearchContext, now: Date, last: Bool) async -> [Trip] {
         let currentTime = clock.now()
         let allPairs = context.departures.flatMap { from in context.arrivals.map { (from, $0) } }
         func isReusable(_ cache: PairCache?) -> Bool {
@@ -172,18 +235,6 @@ public actor StationRouter {
                     && now.timeIntervalSince($0.fetchedAt) < 300 && ServiceClock.calendar.isDate($0.fetchedAt, inSameDayAs: now)
             } ?? false
         }
-        // Try a pair retained in the persisted route before comparing every
-        // feed-specific ID again after an app launch.
-        let persisted =
-            preferred.map { pair in allPairs.filter { $0.0.station.id == pair.from && $0.1.station.id == pair.to } } ?? []
-        if !persisted.isEmpty {
-            let result = await search(persisted, now: now, currentTime: currentTime, last: last)
-            if hasUsableTrip(result, now: currentTime, last: last) {
-                rememberPairs(result, context: context, now: now, last: last)
-                return result
-            }
-        }
-
         // A normal route has already selected a practical station pair. The
         // same pair is the best first choice for the last-train lookup.
         let cache = last && isReusable(lastPairs) ? lastPairs : normalPairs
@@ -198,12 +249,14 @@ public actor StationRouter {
         return result
     }
 
-    private func search(_ pairs: [(StationAccess, StationAccess)], now: Date, currentTime: Date, last: Bool) async -> [Trip] {
+    private func search(
+        _ pairs: [(StationAccess, StationAccess)], now: Date, currentTime: Date, last: Bool, timeout: Duration = .seconds(8)
+    ) async -> [Trip] {
         await withTaskGroup(of: [Trip]?.self) { group in
             // A slow pair must not turn 36 bounded requests into a multi-minute wait.
             group.addTask {
                 do {
-                    try await Task.sleep(for: .seconds(8))
+                    try await Task.sleep(for: timeout)
                     return nil
                 } catch { return [] }
             }
