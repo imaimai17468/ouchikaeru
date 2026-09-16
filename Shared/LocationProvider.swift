@@ -30,7 +30,9 @@ import CoreLocation
             timeout?.cancel()
             timeout = Task { [weak self] in
                 #if targetEnvironment(simulator)
-                    do { try await Task.sleep(for: .seconds(2)) } catch { return }
+                    // Device Hub can take several seconds to publish the scheme's GPX
+                    // location after installing and launching a fresh simulator build.
+                    do { try await Task.sleep(for: .seconds(10)) } catch { return }
                     if let fallback = self?.simulatorFallback {
                         self?.finish(.success(fallback))
                     } else {
