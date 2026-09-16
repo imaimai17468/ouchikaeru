@@ -43,6 +43,12 @@ public struct StationSearchContext: Sendable {
     public let arrivals: [StationAccess]
 }
 
+private struct LocatedStation {
+    let station: StationCandidate
+    let coordinate: Coordinate
+    let name: String
+}
+
 public struct StationPair: Equatable, Sendable {
     public let from: String
     public let to: String
@@ -83,11 +89,6 @@ public actor StationRouter {
         let destination: Coordinate
         let fetchedAt: Date
         let pairs: [PairKey]
-    }
-    private struct LocatedStation {
-        let station: StationCandidate
-        let coordinate: Coordinate
-        let name: String
     }
     private var normalPairs: PairCache?
     private var lastPairs: PairCache?
@@ -152,28 +153,6 @@ public actor StationRouter {
         } catch { return [] }
     }
 
-    private func nearestRepresentative(in stations: [StationCandidate], to coordinate: Coordinate) -> StationCandidate? {
-        let valid = stations.compactMap { station -> LocatedStation? in
-            guard let point = station.coordinate, point.isValid else { return nil }
-            return LocatedStation(station: station, coordinate: point, name: StationNameFormatter.displayName(station.name))
-        }
-        guard
-            let nearest = valid.min(by: { lhs, rhs in
-                let leftDistance = lhs.coordinate.distance(to: coordinate)
-                let rightDistance = rhs.coordinate.distance(to: coordinate)
-                if leftDistance != rightDistance { return leftDistance < rightDistance }
-                if lhs.name != rhs.name { return lhs.name < rhs.name }
-                return lhs.station.id < rhs.station.id
-            })
-        else { return nil }
-        return valid.filter { $0.name == nearest.name }.map(\.station).min { lhs, rhs in
-            let leftWeight = lhs.weight ?? 0
-            let rightWeight = rhs.weight ?? 0
-            if leftWeight != rightWeight { return leftWeight > rightWeight }
-            return lhs.id < rhs.id
-        }
-    }
-
     public func plan(
         origin: Coordinate, destination: Coordinate, context: StationSearchContext?, now: Date, last: Bool,
         preferredPair: StationPair? = nil
@@ -219,7 +198,11 @@ public actor StationRouter {
         let matches = context.departures.flatMap { from in
             context.arrivals.compactMap { to in from.station.id == pair.from && to.station.id == pair.to ? (from, to) : nil }
         }
-        return matches.isEmpty ? nil : matches
+        if !matches.isEmpty { return matches }
+        guard context.departures.count == 1, context.arrivals.count == 1, let from = context.departures.first,
+            let to = context.arrivals.first
+        else { return nil }
+        return [(from.replacingStationID(with: pair.from), to.replacingStationID(with: pair.to))]
     }
 
     private func fastestPlan(origin: Coordinate, destination: Coordinate, context: StationSearchContext, now: Date) async throws
@@ -377,5 +360,38 @@ public actor StationRouter {
         value.leaveBy = trip.leaveBy.addingTimeInterval(-access)
         value.finalArrivalTime = trip.finalArrivalTime.addingTimeInterval(egress)
         return value
+    }
+}
+
+private extension StationRouter {
+    func nearestRepresentative(in stations: [StationCandidate], to coordinate: Coordinate) -> StationCandidate? {
+        let valid = stations.compactMap { station -> LocatedStation? in
+            guard let point = station.coordinate, point.isValid else { return nil }
+            return LocatedStation(station: station, coordinate: point, name: StationNameFormatter.displayName(station.name))
+        }
+        guard
+            let nearest = valid.min(by: { lhs, rhs in
+                let leftDistance = lhs.coordinate.distance(to: coordinate)
+                let rightDistance = rhs.coordinate.distance(to: coordinate)
+                if leftDistance != rightDistance { return leftDistance < rightDistance }
+                if lhs.name != rhs.name { return lhs.name < rhs.name }
+                return lhs.station.id < rhs.station.id
+            })
+        else { return nil }
+        return valid.filter { $0.name == nearest.name }.map(\.station).min { lhs, rhs in
+            let leftWeight = lhs.weight ?? 0
+            let rightWeight = rhs.weight ?? 0
+            if leftWeight != rightWeight { return leftWeight > rightWeight }
+            return lhs.id < rhs.id
+        }
+    }
+}
+
+private extension StationAccess {
+    func replacingStationID(with id: String) -> StationAccess {
+        StationAccess(
+            station: StationCandidate(
+                id: id, name: station.name, lat: station.lat, lon: station.lon, kind: station.kind, weight: station.weight),
+            seconds: seconds)
     }
 }

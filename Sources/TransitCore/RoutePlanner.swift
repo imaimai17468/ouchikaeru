@@ -59,8 +59,10 @@ public actor RoutePlanner: RoutePlanning {
     public func addingLastTrain(to summary: RouteSummary, context: StationSearchContext?, now: Date) async -> RouteSummary {
         var updated = summary
         do {
+            let preferredPair = reusableStationPair(in: summary, origin: summary.origin, destination: summary.destination)
             let results = try await router.plan(
-                origin: summary.origin, destination: summary.destination.coordinate, context: context, now: now, last: true)
+                origin: summary.origin, destination: summary.destination.coordinate, context: context, now: now, last: true,
+                preferredPair: preferredPair)
             if let final = RouteParser.lastTrain(in: results, serviceDate: now) {
                 updated.lastTrain = final
                 updated.lastTrainStatus = final.leaveBy < clock.now() ? .ended : .available

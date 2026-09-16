@@ -37,13 +37,13 @@ Xcodeの各ターゲットのSigning & Capabilitiesで自分のDevelopment Team�
 
 ## APIと時刻
 
-[Transit APIの公開仕様](https://api.transit.ls8h.com/api/openapi.json)に従い、`GET /api/v1/plan` に駅ID、サービス日、時刻、`type=departure` / `type=last` を渡します。対象モードはrail/subway/tram/monorailです。場所検索は `GET /api/v1/places/suggest?q=...` を使います。
+[Transit APIの公開仕様](https://api.transit.ls8h.com/api/openapi.json)に従い、`GET /api/v1/plan` に駅ID、サービス日、時刻、通常経路では`type=departure`、終電では23:59:59の`type=arrival`を渡します。対象モードはrail/subway/tram/monorailです。場所検索は `GET /api/v1/places/suggest?q=...` を使います。
 
 ### 駅間検索と徒歩
 
 `StationRouter` は両端の `places/reverse`（半径500m、10候補）で駅を探し、最大3駅名を `locations/suggest` で交通APIの駅IDに解決します。その中から直線距離が最も近い物理駅を1つ選び、同じ駅に路線別IDが複数ある場合はAPIの重みが最も高い代表IDを使います。徒歩は `MKDirections` のwalkingを使い、出発側は分単位への切り上げとホームまでの余裕1分を加えます。駅間検索には徒歩後の時刻を渡し、降車後の徒歩は最終到着に加算します。
 
-通常経路は最寄りの出発駅と到着駅の1組だけを駅IDで検索します。駅ID検索を400ミリ秒先行させて座標検索も並行し、先に利用可能になった方を採用します。これにより、大駅の路線別IDを総当たりしていた待ち時間をなくしつつ、代表IDで検索できない場合は座標検索へ戻れます。終電も同じ駅の組み合わせを使います。座標検索で得た乗降駅IDも再利用します。
+通常経路は最寄りの出発駅と到着駅の1組だけを駅IDで検索します。駅ID検索を400ミリ秒先行させて座標検索も並行し、先に利用可能になった方を採用します。これにより、大駅の路線別IDを総当たりしていた待ち時間をなくしつつ、代表IDで検索できない場合は座標検索へ戻れます。終電は通常経路で実際に使われた乗降駅IDを最優先し、23:59までに到着する最後の有効経路を検索します。座標検索で得た乗降駅IDも再利用します。
 
 駅が見つからない、徒歩が取得できない、利用できる駅間経路がない場合は従来の座標検索へ切り替えます。座標検索は最大60秒です。駅から離れた住所やAPI未収録の場所ではこちらが使われるため、初回が常に高速になるわけではありません。
 

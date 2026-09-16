@@ -121,7 +121,7 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(requests.last?.last, true)
     }
 
-    func testPersistedPairAvoidsComparingEveryFeedAfterRelaunch() async throws {
+    func testPersistedActualPairReplacesRepresentativeFeedIDs() async throws {
         let api = StationAPIStub()
         let router = StationRouter(api: api, walking: WalkingStub())
         let context = await router.prepare(origin: origin, destination: destination)
@@ -129,12 +129,12 @@ final class StationRouterTests: XCTestCase {
 
         let trips = try await router.plan(
             origin: origin, destination: destination, context: context, now: now, last: false,
-            preferredPair: StationPair(from: "feed:b", to: "feed:c"))
+            preferredPair: StationPair(from: "feed:actual-from", to: "feed:actual-to"))
 
         let requests = await api.requests
         XCTAssertEqual(requests.count, 1)
-        XCTAssertEqual(requests.first?.from, "feed:b")
-        XCTAssertEqual(trips.first?.lineName, "feed:b")
+        XCTAssertEqual(requests.first?.from, "feed:actual-from")
+        XCTAssertEqual(trips.first?.lineName, "feed:actual-from")
     }
 
     func testCoordinateFallbackOverlapsSlowStationComparison() async throws {

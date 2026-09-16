@@ -66,6 +66,27 @@ final class RoutePlannerTests: XCTestCase {
         XCTAssertEqual(completed.lastTrain, fixture.lastTrain)
     }
 
+    func testAddingLastTrainUsesStationsObservedInCurrentRoute() async throws {
+        let fixture = fixture()
+        var current = fixture.currentTrip
+        current.departure.stationID = "feed:actual-from"
+        current.arrival.stationID = "feed:actual-to"
+        let summary = RouteSummary(
+            destination: fixture.destination, origin: fixture.origin, trip: current, lastTrain: nil,
+            lastTrainStatus: .unavailable, fetchedAt: fixture.now)
+        let context = StationSearchContext(
+            origin: fixture.origin, destination: fixture.destination.coordinate,
+            departures: [StationAccess(station: station(id: "feed:representative-from"), seconds: 0)],
+            arrivals: [StationAccess(station: station(id: "feed:representative-to"), seconds: 0)])
+
+        let completed = await fixture.planner.addingLastTrain(to: summary, context: context, now: fixture.now)
+
+        let requests = await fixture.api.stationRequests
+        XCTAssertEqual(requests.map(\.from), ["feed:actual-from"])
+        XCTAssertEqual(requests.map(\.to), ["feed:actual-to"])
+        XCTAssertEqual(completed.lastTrain, fixture.lastTrain)
+    }
+
     func testFailedLastTrainLookupIsUnavailable() async throws {
         let fixture = fixture(lastFails: true)
         let plan = try await fixture.planner.currentRoute(
@@ -143,7 +164,7 @@ private actor PlannerAPI: StationRoutingAPI {
     func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] { [] }
     func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {
         stationRequests.append(StationRequest(from: from, to: to))
-        return current
+        return last ? self.last : current
     }
     func plan(origin: Coordinate, destination: Coordinate, now: Date, last: Bool) async throws -> [Trip] {
         if last {

@@ -51,12 +51,15 @@ final class TransitAPITests: XCTestCase {
             let query = try queryParameters(from: request)
             XCTAssertEqual(query["allowModes"], "rail")
             XCTAssertEqual(query["numItineraries"], "1")
+            XCTAssertEqual(query["type"], "arrival")
+            XCTAssertEqual(query["time"], "23:59:59")
             return Data(#"{"date":"20260910","timezone":"Asia/Tokyo","journeys":[]}"#.utf8)
         }
         _ = try await client().plan(
             origin: .init(latitude: 35.681, longitude: 139.767), destination: .init(latitude: 35.56, longitude: 140.36),
             now: Date(), last: true, allowedModes: ["rail"])
     }
+
     func testSimulatorDefaultLocationIsRejectedBeforeNetworkRequest() async throws {
         TransitStub.handler = { _ in
             XCTFail("Must not search US to Japan")
