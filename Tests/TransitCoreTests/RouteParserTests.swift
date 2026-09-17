@@ -126,6 +126,30 @@ final class RouteParserTests: XCTestCase {
 
         XCTAssertEqual(decoded.trip(at: trip.leaveBy), trip)
     }
+    func testSummaryDecodesCacheSavedBeforeLocationStatusWasAdded() throws {
+        let summary = RouteSummary(
+            destination: Destination(name: "自宅", coordinate: .init(latitude: 35, longitude: 139)),
+            origin: .init(latitude: 35, longitude: 140), trip: nil, lastTrain: nil, lastTrainStatus: .unavailable,
+            fetchedAt: Date())
+        var object = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(summary)) as? [String: Any])
+        object.removeValue(forKey: "locationStatus")
+
+        let decoded = try JSONDecoder().decode(
+            RouteSummary.self, from: JSONSerialization.data(withJSONObject: object, options: [.sortedKeys]))
+
+        XCTAssertFalse(decoded.isAtDestination)
+    }
+    func testAtDestinationSummaryRefreshesAfterFiveMinutesWithoutBeingStale() {
+        let fetchedAt = Date(timeIntervalSince1970: 1_000)
+        let summary = RouteSummary(
+            destination: Destination(name: "自宅", coordinate: .init(latitude: 35, longitude: 139)),
+            origin: .init(latitude: 35, longitude: 139), trip: nil, lastTrain: nil, lastTrainStatus: .unavailable,
+            fetchedAt: fetchedAt, locationStatus: .atDestination)
+
+        XCTAssertFalse(summary.isStale(at: fetchedAt))
+        XCTAssertFalse(summary.needsRefresh(at: fetchedAt.addingTimeInterval(300)))
+        XCTAssertTrue(summary.needsRefresh(at: fetchedAt.addingTimeInterval(301)))
+    }
     func testLastTrainRejectsNextMorningAndOvernightTransfer() throws {
         let serviceDate = try XCTUnwrap(ServiceClock.calendar.date(from: DateComponents(year: 2026, month: 9, day: 11)))
         let nextDay = try XCTUnwrap(ServiceClock.calendar.date(byAdding: .day, value: 1, to: serviceDate))

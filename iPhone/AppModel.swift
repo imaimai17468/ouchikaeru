@@ -207,6 +207,7 @@ private enum AppRouteState: Equatable {
     }
 
     private static func loadedState(summary: RouteSummary, isLoadingLastTrain: Bool, at now: Date) -> AppRouteState {
+        if summary.isAtDestination { return .available(summary, isLoadingLastTrain: false) }
         guard summary.trip(at: now) != nil else {
             return .unavailable(
                 summary: summary, message: TransitError.noRoute.localizedDescription, isLoadingLastTrain: isLoadingLastTrain)

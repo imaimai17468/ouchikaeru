@@ -123,6 +123,7 @@ import Foundation
     private func accepts(_ requestID: UUID) -> Bool { !Task.isCancelled && requestID == refreshID }
 
     private static func state(for summary: RouteSummary, at now: Date) -> RouteLoadState {
+        if summary.isAtDestination { return .available(summary) }
         if summary.trip(at: now) == nil { return .unavailable(previous: summary, message: "利用できる経路がありません。") }
         return .available(summary)
     }

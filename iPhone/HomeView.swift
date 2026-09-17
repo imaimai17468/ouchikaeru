@@ -44,25 +44,29 @@ struct HomeView: View {
                         }
                         if let summary = model.summary {
                             TimelineView(.periodic(from: .now, by: 30)) { context in
-                                VStack(alignment: .leading, spacing: 24) {
-                                    if let trip = summary.trip(at: context.date) {
-                                        JourneyCard(
-                                            trip: trip, destinationName: summary.destination.name, now: context.date,
-                                            isStale: summary.isStale(at: context.date))
-                                    } else {
-                                        Text("現在利用できる経路がありません。").foregroundStyle(.secondary)
-                                    }
-                                    if model.isLoadingLastTrain {
-                                        LastTrainLoadingCard()
-                                    } else if let last = summary.usableLastTrain() {
-                                        JourneyCard(
-                                            trip: last, destinationName: summary.destination.name, now: context.date,
-                                            isStale: summary.isStale(at: context.date), isLastTrain: true)
-                                    } else {
-                                        VStack(alignment: .leading, spacing: 8) {
-                                            Label("終電", systemImage: "moon.stars.fill").font(.headline)
-                                            Text(summary.lastTrainText(at: context.date)).font(.subheadline)
-                                        }.padding(18).frame(maxWidth: .infinity, alignment: .leading).flatCard()
+                                if summary.isAtDestination {
+                                    AtDestinationCard(destinationName: summary.destination.name)
+                                } else {
+                                    VStack(alignment: .leading, spacing: 24) {
+                                        if let trip = summary.trip(at: context.date) {
+                                            JourneyCard(
+                                                trip: trip, destinationName: summary.destination.name, now: context.date,
+                                                isStale: summary.isStale(at: context.date))
+                                        } else {
+                                            Text("現在利用できる経路がありません。").foregroundStyle(.secondary)
+                                        }
+                                        if model.isLoadingLastTrain {
+                                            LastTrainLoadingCard()
+                                        } else if let last = summary.usableLastTrain() {
+                                            JourneyCard(
+                                                trip: last, destinationName: summary.destination.name, now: context.date,
+                                                isStale: summary.isStale(at: context.date), isLastTrain: true)
+                                        } else {
+                                            VStack(alignment: .leading, spacing: 8) {
+                                                Label("終電", systemImage: "moon.stars.fill").font(.headline)
+                                                Text(summary.lastTrainText(at: context.date)).font(.subheadline)
+                                            }.padding(18).frame(maxWidth: .infinity, alignment: .leading).flatCard()
+                                        }
                                     }
                                 }
                             }
@@ -132,6 +136,19 @@ struct HomeView: View {
         }
     }
 
+}
+
+private struct AtDestinationCard: View {
+    let destinationName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("目的地に到着しています", systemImage: "house.fill").font(.title3.bold()).foregroundStyle(Color.ouchiGreen)
+            Text("現在地は「\(destinationName)」の近くです。経路案内は必要ありません。").font(.subheadline).foregroundStyle(.secondary).fixedSize(
+                horizontal: false, vertical: true)
+        }.padding(18).frame(maxWidth: .infinity, alignment: .leading).flatCard().accessibilityElement(children: .combine)
+            .accessibilityIdentifier("at-destination-card")
+    }
 }
 
 private struct RouteLoadingPanel: View {

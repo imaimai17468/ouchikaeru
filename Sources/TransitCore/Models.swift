@@ -110,6 +110,8 @@ public struct Trip: Codable, Equatable, Sendable {
 
 public enum LastTrainStatus: String, Codable, Sendable { case available, ended, unavailable }
 
+public enum RouteLocationStatus: String, Codable, Sendable { case away, atDestination }
+
 public struct RouteSummary: Codable, Equatable, Sendable {
     public var destination: Destination
     public var origin: Coordinate
@@ -118,9 +120,10 @@ public struct RouteSummary: Codable, Equatable, Sendable {
     public var lastTrain: Trip?
     public var lastTrainStatus: LastTrainStatus
     public var fetchedAt: Date
+    public var locationStatus: RouteLocationStatus
     public init(
         destination: Destination, origin: Coordinate, trip: Trip?, upcomingTrips: [Trip]? = nil, lastTrain: Trip?,
-        lastTrainStatus: LastTrainStatus, fetchedAt: Date
+        lastTrainStatus: LastTrainStatus, fetchedAt: Date, locationStatus: RouteLocationStatus = .away
     ) {
         self.destination = destination
         self.origin = origin
@@ -129,10 +132,28 @@ public struct RouteSummary: Codable, Equatable, Sendable {
         self.lastTrain = lastTrain
         self.lastTrainStatus = lastTrainStatus
         self.fetchedAt = fetchedAt
+        self.locationStatus = locationStatus
     }
+    private enum CodingKeys: String, CodingKey {
+        case destination, origin, trip, upcomingTrips, lastTrain, lastTrainStatus, fetchedAt, locationStatus
+    }
+    public init(from decoder: any Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        destination = try values.decode(Destination.self, forKey: .destination)
+        origin = try values.decode(Coordinate.self, forKey: .origin)
+        trip = try values.decodeIfPresent(Trip.self, forKey: .trip)
+        upcomingTrips = try values.decodeIfPresent([Trip].self, forKey: .upcomingTrips)
+        lastTrain = try values.decodeIfPresent(Trip.self, forKey: .lastTrain)
+        lastTrainStatus = try values.decode(LastTrainStatus.self, forKey: .lastTrainStatus)
+        fetchedAt = try values.decode(Date.self, forKey: .fetchedAt)
+        locationStatus = try values.decodeIfPresent(RouteLocationStatus.self, forKey: .locationStatus) ?? .away
+    }
+    public var isAtDestination: Bool { locationStatus == .atDestination }
     public func trip(at now: Date) -> Trip? { RouteParser.recommended(upcomingTrips ?? trip.map { [$0] } ?? [], now: now) }
-    public func needsRefresh(at now: Date) -> Bool { now.timeIntervalSince(fetchedAt) > 300 || trip(at: now) == nil }
-    public func isStale(at now: Date) -> Bool { trip(at: now) == nil }
+    public func needsRefresh(at now: Date) -> Bool {
+        now.timeIntervalSince(fetchedAt) > 300 || (!isAtDestination && trip(at: now) == nil)
+    }
+    public func isStale(at now: Date) -> Bool { !isAtDestination && trip(at: now) == nil }
     public func usableLastTrain() -> Trip? {
         guard let lastTrain, RouteParser.isValidLastTrain(lastTrain, serviceDate: fetchedAt) else { return nil }
         return lastTrain

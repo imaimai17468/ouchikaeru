@@ -59,12 +59,17 @@ private struct WatchRouteContent: View {
     {
         WatchDestinationHeader(name: summary.destination.name, isRefreshing: state.isLoading, refresh: refresh)
         if let notice { Text(notice).font(.caption2).foregroundStyle(noticeColor) }
-        if summary.isStale(at: now) { Text("情報が古くなっています").font(.caption2).foregroundStyle(.orange) }
-        if let trip = summary.trip(at: now) {
-            WatchArrivalHero(trip: trip, destinationName: summary.destination.name, now: now)
-            WatchRouteDetail(title: "経路詳細", trip: trip, now: now)
+        if summary.isAtDestination {
+            Label("目的地付近です", systemImage: "house.fill").font(.headline).foregroundStyle(Color.ouchiGreen)
+            Text("経路案内は必要ありません").font(.caption2).foregroundStyle(.secondary)
+        } else {
+            if summary.isStale(at: now) { Text("情報が古くなっています").font(.caption2).foregroundStyle(.orange) }
+            if let trip = summary.trip(at: now) {
+                WatchArrivalHero(trip: trip, destinationName: summary.destination.name, now: now)
+                WatchRouteDetail(title: "経路詳細", trip: trip, now: now)
+            }
+            WatchLastTrainSummary(summary: summary, now: now)
         }
-        WatchLastTrainSummary(summary: summary, now: now)
         Text(ServiceClock.updated(summary.fetchedAt)).font(.caption2).foregroundStyle(.secondary)
     }
 

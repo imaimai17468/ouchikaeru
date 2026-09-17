@@ -58,16 +58,20 @@ private struct SmallRouteWidget: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             destinationLabel(summary.destination.name, markSize: 16, font: .caption.bold())
-            if let trip = summary.trip(at: now) {
-                CompactJourney(title: "今出る", trip: trip, now: now)
+            if summary.isAtDestination {
+                DestinationReachedWidget(compact: true)
             } else {
-                CompactUnavailableJourney(title: "今出る", text: "経路なし")
-            }
-            Divider()
-            if let last = summary.usableLastTrain() {
-                CompactJourney(title: "終電", trip: last, now: now, isLast: true)
-            } else {
-                CompactUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+                if let trip = summary.trip(at: now) {
+                    CompactJourney(title: "今出る", trip: trip, now: now)
+                } else {
+                    CompactUnavailableJourney(title: "今出る", text: "経路なし")
+                }
+                Divider()
+                if let last = summary.usableLastTrain() {
+                    CompactJourney(title: "終電", trip: last, now: now, isLast: true)
+                } else {
+                    CompactUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+                }
             }
         }
     }
@@ -80,17 +84,21 @@ private struct MediumRouteWidget: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             destinationLabel(summary.destination.name, markSize: 20, font: .headline)
-            HStack(alignment: .top, spacing: 16) {
-                if let trip = summary.trip(at: now) {
-                    DetailedJourney(title: "今出ると", trip: trip, now: now)
-                } else {
-                    WidgetUnavailableJourney(title: "今出ると", text: "経路を取得できませんでした")
-                }
-                Divider()
-                if let last = summary.usableLastTrain() {
-                    DetailedJourney(title: "終電", trip: last, now: now, isLast: true)
-                } else {
-                    WidgetUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+            if summary.isAtDestination {
+                DestinationReachedWidget()
+            } else {
+                HStack(alignment: .top, spacing: 16) {
+                    if let trip = summary.trip(at: now) {
+                        DetailedJourney(title: "今出ると", trip: trip, now: now)
+                    } else {
+                        WidgetUnavailableJourney(title: "今出ると", text: "経路を取得できませんでした")
+                    }
+                    Divider()
+                    if let last = summary.usableLastTrain() {
+                        DetailedJourney(title: "終電", trip: last, now: now, isLast: true)
+                    } else {
+                        WidgetUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+                    }
                 }
             }
         }
@@ -104,18 +112,34 @@ private struct LargeRouteWidget: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             destinationLabel(summary.destination.name, markSize: 24, font: .title3.bold())
-            if let trip = summary.trip(at: now) {
-                FullJourney(title: "今出ると", trip: trip, now: now)
+            if summary.isAtDestination {
+                DestinationReachedWidget()
             } else {
-                WidgetUnavailableJourney(title: "今出ると", text: "経路を取得できませんでした")
-            }
-            Divider()
-            if let last = summary.usableLastTrain() {
-                FullJourney(title: "終電", trip: last, now: now, isLast: true)
-            } else {
-                WidgetUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+                if let trip = summary.trip(at: now) {
+                    FullJourney(title: "今出ると", trip: trip, now: now)
+                } else {
+                    WidgetUnavailableJourney(title: "今出ると", text: "経路を取得できませんでした")
+                }
+                Divider()
+                if let last = summary.usableLastTrain() {
+                    FullJourney(title: "終電", trip: last, now: now, isLast: true)
+                } else {
+                    WidgetUnavailableJourney(title: "終電", text: summary.lastTrainText(at: now))
+                }
             }
         }
+    }
+}
+
+private struct DestinationReachedWidget: View {
+    var compact = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: compact ? 3 : 6) {
+            Label("目的地付近です", systemImage: "house.fill").font(compact ? .caption.bold() : .headline).foregroundStyle(
+                Color.ouchiGreen)
+            Text("経路案内は必要ありません").font(compact ? .caption2 : .caption).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 

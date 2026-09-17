@@ -26,6 +26,7 @@ public protocol RoutePlanning: Sendable {
 
 /// Coordinates the route rules shared by the iPhone and Apple Watch clients.
 public actor RoutePlanner: RoutePlanning {
+    private static let destinationArrivalRadiusMeters = 100.0
     private let router: StationRouter
     private let clock: WallClock
 
@@ -35,12 +36,19 @@ public actor RoutePlanner: RoutePlanning {
     }
 
     public func prepare(origin: Coordinate, destination: Coordinate) async -> StationSearchContext? {
-        await router.prepare(origin: origin, destination: destination)
+        guard !Self.hasArrived(origin: origin, destination: destination) else { return nil }
+        return await router.prepare(origin: origin, destination: destination)
     }
 
     public func currentRoute(
         origin: Coordinate, destination: Destination, context: StationSearchContext?, previous: RouteSummary?, now: Date
     ) async throws -> CurrentRoutePlan {
+        if Self.hasArrived(origin: origin, destination: destination.coordinate) {
+            let summary = RouteSummary(
+                destination: destination, origin: origin, trip: nil, lastTrain: nil, lastTrainStatus: .unavailable,
+                fetchedAt: clock.now(), locationStatus: .atDestination)
+            return CurrentRoutePlan(summary: summary, context: nil, needsLastTrain: false)
+        }
         let retainedLastTrain = reusableLastTrain(in: previous, origin: origin, destination: destination, now: now)
         let preferredPair = reusableStationPair(in: previous, origin: origin, destination: destination)
         let trips = try await planWithRetry(
@@ -82,6 +90,10 @@ public actor RoutePlanner: RoutePlanning {
             ServiceClock.calendar.isDate(summary.fetchedAt, inSameDayAs: now), let lastTrain = summary.usableLastTrain()
         else { return nil }
         return lastTrain
+    }
+
+    private static func hasArrived(origin: Coordinate, destination: Coordinate) -> Bool {
+        origin.distance(to: destination) <= destinationArrivalRadiusMeters
     }
 
     private func reusableStationPair(in summary: RouteSummary?, origin: Coordinate, destination: Destination) -> StationPair? {

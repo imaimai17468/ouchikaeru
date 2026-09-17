@@ -21,6 +21,31 @@ final class RoutePlannerTests: XCTestCase {
         XCTAssertTrue(plan.needsLastTrain)
     }
 
+    func testCurrentRouteAtDestinationSkipsTransitAPI() async throws {
+        let fixture = fixture()
+        let origin = Coordinate(
+            latitude: fixture.destination.coordinate.latitude + 0.0005, longitude: fixture.destination.coordinate.longitude)
+
+        let plan = try await fixture.planner.currentRoute(
+            origin: origin, destination: fixture.destination, context: nil, previous: nil, now: fixture.now)
+        let requestCount = await fixture.api.currentRequestCount
+
+        XCTAssertTrue(plan.summary.isAtDestination)
+        XCTAssertFalse(plan.needsLastTrain)
+        XCTAssertEqual(requestCount, 0)
+    }
+
+    func testPrepareAtDestinationSkipsNearbyStationLookup() async {
+        let fixture = fixture()
+
+        let context = await fixture.planner.prepare(
+            origin: fixture.destination.coordinate, destination: fixture.destination.coordinate)
+        let requestCount = await fixture.api.nearbyRequestCount
+
+        XCTAssertNil(context)
+        XCTAssertEqual(requestCount, 0)
+    }
+
     func testTimedOutCurrentRouteRetriesOnce() async throws {
         let fixture = fixture(timesOutOnce: true)
 
@@ -152,6 +177,7 @@ private actor PlannerAPI: StationRoutingAPI {
     let timesOutOnce: Bool
     let lastFails: Bool
     private(set) var currentRequestCount = 0
+    private(set) var nearbyRequestCount = 0
     private(set) var stationRequests: [StationRequest] = []
 
     init(current: [Trip], last: [Trip], timesOutOnce: Bool = false, lastFails: Bool = false) {
@@ -161,7 +187,10 @@ private actor PlannerAPI: StationRoutingAPI {
         self.lastFails = lastFails
     }
 
-    func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] { [] }
+    func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] {
+        nearbyRequestCount += 1
+        return []
+    }
     func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {
         stationRequests.append(StationRequest(from: from, to: to))
         return last ? self.last : current
