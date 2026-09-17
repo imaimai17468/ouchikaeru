@@ -58,7 +58,7 @@ for name, (files, sdk, bundle, kind, folder) in specs.items():
         settings['ASSETCATALOG_COMPILER_APPICON_NAME'] = 'AppIcon'
     if kind == 'app-extension': settings['APPLICATION_EXTENSION_API_ONLY'] = 'YES'
     add(name, 'PBXNativeTarget', buildConfigurationList=configurations(name,settings), buildPhases=[sources,resources], buildRules=[], dependencies=[], name=name, productName=name, productReference=product, productType='com.apple.product-type.'+kind)
-    info = dict(CFBundleDisplayName='オウチカエル', CFBundleExecutable='$(EXECUTABLE_NAME)', CFBundleIdentifier='$(PRODUCT_BUNDLE_IDENTIFIER)', CFBundleInfoDictionaryVersion='6.0', CFBundleName='$(PRODUCT_NAME)', CFBundlePackageType='XPC!' if kind == 'app-extension' else 'APPL', CFBundleShortVersionString='1.0', CFBundleVersion='2')
+    info = dict(CFBundleDisplayName='オウチカエル', CFBundleExecutable='$(EXECUTABLE_NAME)', CFBundleIdentifier='$(PRODUCT_BUNDLE_IDENTIFIER)', CFBundleInfoDictionaryVersion='6.0', CFBundleName='$(PRODUCT_NAME)', CFBundlePackageType='XPC!' if kind == 'app-extension' else 'APPL', CFBundleShortVersionString='1.0', CFBundleVersion='3')
     if name == 'Ouchikaeru':
         info.update(NSLocationWhenInUseUsageDescription='現在地から登録した目的地までの経路を検索するため、現在地を交通経路APIへ送信します。', UILaunchScreen={}, UISupportedInterfaceOrientations=['UIInterfaceOrientationPortrait'], CFBundleURLTypes=[dict(CFBundleURLName=bundle,CFBundleURLSchemes=['ouchikaeru'])])
     elif name == 'OuchikaeruWidget': info['NSExtension'] = dict(NSExtensionPointIdentifier='com.apple.widgetkit-extension')
