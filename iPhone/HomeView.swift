@@ -77,6 +77,7 @@ struct HomeView: View {
                             Text("いつもの場所へ、\nひと目でカエル。").font(.largeTitle.bold()).multilineTextAlignment(.center)
                             Text("目的地をひとつ登録すると、現在地からの発車・到着・終電がすぐにわかります。").foregroundStyle(.secondary).multilineTextAlignment(
                                 .center)
+                            CoverageNoticeCard()
                             Button("目的地を登録") { editing = true }.buttonStyle(OuchiPrimaryButtonStyle())
                             VStack(spacing: 6) {
                                 Text("経路検索時に現在地と目的地の座標をTransit APIへ送信します。移動履歴は保存しません。").font(.caption).foregroundStyle(.secondary)
@@ -136,6 +137,41 @@ struct HomeView: View {
         }
     }
 
+}
+
+private enum CoverageGuide {
+    static let supported = "日本国内の鉄道・地下鉄・路面電車・モノレールのうち、Transit APIに交通データが収録されている路線"
+    static let unavailable = "バスだけの地域、フェリー・航空の経路、交通データが未収録の路線では利用できません"
+    static let slow = "駅から遠い場所、交通データが少ない地域、終電検索では、最大約1分かかる、または経路を取得できない場合があります"
+}
+
+private struct CoverageNoticeCard: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("対応地域と制限", systemImage: "map.fill").font(.headline).foregroundStyle(Color.ouchiGreen)
+            CoverageNoticeRow(title: "利用できる場所", detail: CoverageGuide.supported, symbol: "checkmark.circle.fill")
+            Divider()
+            CoverageNoticeRow(title: "利用できない経路", detail: CoverageGuide.unavailable, symbol: "xmark.circle.fill")
+            CoverageNoticeRow(title: "時間がかかる場合", detail: CoverageGuide.slow, symbol: "clock.fill")
+        }.padding(16).frame(maxWidth: .infinity, alignment: .leading).flatCard().multilineTextAlignment(.leading)
+            .accessibilityElement(children: .combine).accessibilityIdentifier("coverage-notice-card")
+    }
+}
+
+private struct CoverageNoticeRow: View {
+    let title: String
+    let detail: String
+    let symbol: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: symbol).foregroundStyle(Color.ouchiGreen).frame(width: 18)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.subheadline.bold())
+                Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
 }
 
 private struct AtDestinationCard: View {
@@ -406,6 +442,11 @@ private struct InformationView: View {
                     if let feedsURL = URL(string: "https://api.transit.ls8h.com/api/v1/feeds") {
                         Link("交通データのライセンス・帰属", destination: feedsURL)
                     }
+                }
+                Section("対応地域と制限") {
+                    CoverageNoticeRow(title: "利用できる場所", detail: CoverageGuide.supported, symbol: "checkmark.circle.fill")
+                    CoverageNoticeRow(title: "利用できない経路", detail: CoverageGuide.unavailable, symbol: "xmark.circle.fill")
+                    CoverageNoticeRow(title: "時間がかかる場合", detail: CoverageGuide.slow, symbol: "clock.fill")
                 }
             }.scrollContentBackground(.hidden).background(Color.appCanvas).navigationTitle("情報").navigationBarTitleDisplayMode(
                 .inline
