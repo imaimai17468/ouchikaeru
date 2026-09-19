@@ -62,22 +62,10 @@ struct DestinationEditor: View {
                         let requestID = selectionID
                         resolving = true
                         defer { if requestID == selectionID { resolving = false } }
-                        do {
-                            let results = try await TransitAPI().reverse(coordinate: coordinate)
-                            try Task.checkCancellation()
-                            if let place = results.first {
-                                selectedName = place.displayName
-                                address = place.displayAddress
-                            }
-                            if address == nil { address = await geocodedAddress(for: coordinate) }
-                            if address == nil { address = coordinateFallback(for: coordinate) }
-                            if selectedName == nil { selectedName = address }
-                        } catch {
-                            guard !Task.isCancelled else { return }
-                            address = await geocodedAddress(for: coordinate)
-                            if address == nil { address = coordinateFallback(for: coordinate) }
-                            selectedName = address
-                        }
+                        let resolvedAddress = await geocodedAddress(for: coordinate)
+                        guard !Task.isCancelled, requestID == selectionID else { return }
+                        address = resolvedAddress ?? coordinateFallback(for: coordinate)
+                        selectedName = address
                     }
                 }.toolbar(.hidden, for: .navigationBar).onAppear {
                     if let existing {
