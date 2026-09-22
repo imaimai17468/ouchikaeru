@@ -1,9 +1,16 @@
 import SwiftUI
 
 extension Color {
-    static let ouchiGreen = Color(red: 0.05, green: 0.52, blue: 0.24)
+    static let ouchiGreen = Color("OuchiGreen")
+    static let ouchiButtonGreen = Color(red: 0.02, green: 0.36, blue: 0.12)
     static let ouchiInk = Color(red: 0.04, green: 0.11, blue: 0.06)
     static let ouchiCream = Color(red: 0.97, green: 0.96, blue: 0.84)
+}
+
+extension View {
+    func accessibleTapTarget(minimumSize: CGFloat = 44) -> some View {
+        frame(minWidth: minimumSize, minHeight: minimumSize).contentShape(Rectangle())
+    }
 }
 
 /// A shared "way home" mark that remains legible at app icon, widget, and watch sizes.
@@ -45,9 +52,10 @@ struct OuchiPrimaryButtonStyle: ButtonStyle {
     @Environment(\.isEnabled) private var isEnabled
 
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label.foregroundStyle(.white).padding(.horizontal, 18).padding(.vertical, 11).background(
-            Color.ouchiGreen.opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.42),
-            in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        configuration.label.foregroundStyle(.white).padding(.horizontal, 18).padding(.vertical, 12).frame(minHeight: 44)
+            .background(
+                Color.ouchiButtonGreen.opacity(isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.42),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
