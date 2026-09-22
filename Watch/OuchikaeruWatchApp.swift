@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 @main struct OuchikaeruWatchApp: App {
@@ -19,7 +20,17 @@ private struct WatchHomeView: View {
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { context in
             ScrollView { WatchRouteContent(state: model.state, now: context.date, refresh: model.refresh) }
-        }.onReceive(refreshTimer) { date in model.refreshIfNeeded(at: date) }
+        }.onReceive(refreshTimer) { date in model.refreshIfNeeded(at: date) }.onChange(of: model.state) { _, state in
+            AccessibilityNotification.Announcement(accessibilityAnnouncement(for: state)).post()
+        }
+    }
+
+    private func accessibilityAnnouncement(for state: RouteLoadState) -> String {
+        switch state {
+        case .available: return "経路情報を更新しました"
+        case .loading(_, let phase): return phase.message
+        case .unavailable(_, let message), .failure(_, let message): return message
+        }
     }
 }
 
@@ -58,7 +69,7 @@ private struct WatchRouteContent: View {
         -> some View
     {
         WatchDestinationHeader(name: summary.destination.name, isRefreshing: state.isLoading, refresh: refresh)
-        if let notice { Text(notice).font(.caption2).foregroundStyle(noticeColor) }
+        if let notice { Text(notice).font(.caption2).foregroundStyle(noticeColor).accessibilityAddTraits(.updatesFrequently) }
         if summary.isAtDestination {
             Label("目的地付近です", systemImage: "house.fill").font(.headline).foregroundStyle(Color.ouchiGreen)
             Text("経路案内は必要ありません").font(.caption2).foregroundStyle(.secondary)
@@ -102,12 +113,11 @@ private struct WatchArrivalHero: View {
         VStack(alignment: .leading, spacing: 1) {
             Text("今出ると").font(.caption.weight(.semibold)).foregroundStyle(Color.ouchiGreen)
             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(
-                    .system(size: 38, weight: .bold, design: .rounded)
-                ).monospacedDigit().lineLimit(1).minimumScaleFactor(0.62)
+                Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.largeTitle.bold()).fontDesign(.rounded)
+                    .monospacedDigit().lineLimit(1).minimumScaleFactor(0.75)
                 Text("到着").font(.caption.bold())
             }
-            Text(destinationName).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+            Text(destinationName).font(.caption2).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.accessibilityElement(children: .combine)
     }
 }
@@ -144,10 +154,11 @@ private struct WatchStopStep: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Image(systemName: "tram.fill").font(.caption2).foregroundStyle(Color.ouchiGreen)
+            Image(systemName: "tram.fill").font(.caption2).foregroundStyle(Color.ouchiGreen).accessibilityHidden(true)
             Text(ServiceClock.time(stop.time, relativeTo: now)).font(.caption.weight(emphasized ? .bold : .regular))
                 .monospacedDigit()
-            Text("\(stop.stationName) \(label)").font(.caption.weight(emphasized ? .semibold : .regular)).lineLimit(1)
+            Text("\(stop.stationName) \(label)").font(.caption.weight(emphasized ? .semibold : .regular)).fixedSize(
+                horizontal: false, vertical: true)
         }.accessibilityElement(children: .combine)
     }
 }
@@ -186,12 +197,12 @@ private struct WatchLastTrainSummary: View {
             if let last = summary.usableLastTrain(), last.leaveBy >= now {
                 HStack(spacing: 5) {
                     Text(ServiceClock.time(last.departure.time, relativeTo: now)).font(.caption.bold()).monospacedDigit()
-                    Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.secondary)
+                    Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.secondary).accessibilityHidden(true)
                     Text(ServiceClock.time(last.finalArrivalTime, relativeTo: now)).font(.caption.bold()).monospacedDigit()
                 }
                 Text("\(last.departure.stationName) 発  ·  \(summary.destination.name) 到着").font(.caption2).foregroundStyle(
                     .secondary
-                ).lineLimit(1)
+                ).fixedSize(horizontal: false, vertical: true)
                 WatchRouteDetail(title: "終電の経路詳細", trip: last, now: now)
             } else {
                 Text(summary.lastTrainText(at: now)).font(.caption2).foregroundStyle(.secondary)
@@ -208,11 +219,11 @@ private struct WatchDestinationHeader: View {
     var body: some View {
         HStack(spacing: 7) {
             OuchiMark().frame(width: 22, height: 22)
-            Text(name).font(.headline).lineLimit(1)
+            Text(name).font(.headline).fixedSize(horizontal: false, vertical: true)
             Spacer(minLength: 2)
-            Button(action: refresh) { if isRefreshing { ProgressView() } else { Image(systemName: "arrow.clockwise") } }
-                .buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).frame(width: 34, height: 34).contentShape(Rectangle())
-                .disabled(isRefreshing).accessibilityLabel("経路を更新")
+            Button(action: refresh) {
+                Group { if isRefreshing { ProgressView() } else { Image(systemName: "arrow.clockwise") } }.accessibleTapTarget()
+            }.buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).disabled(isRefreshing).accessibilityLabel("経路を更新")
         }
     }
 }

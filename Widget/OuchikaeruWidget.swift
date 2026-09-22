@@ -151,10 +151,10 @@ private struct CompactJourney: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 9, weight: .semibold)).foregroundStyle(.secondary)
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 compactTime(isLast ? trip.leaveBy : now)
-                Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.tertiary)
+                Image(systemName: "arrow.right").font(.caption2).foregroundStyle(.tertiary).accessibilityHidden(true)
                 compactTime(trip.finalArrivalTime)
             }
             CompactRouteLine(trip: trip)
@@ -174,15 +174,15 @@ private struct CompactRouteLine: View {
     var body: some View {
         HStack(alignment: .center, spacing: 3) {
             compactStation(trip.departure.stationName, suffix: "発")
-            Image(systemName: "chevron.right").font(.system(size: 7)).foregroundStyle(.tertiary)
+            Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary).accessibilityHidden(true)
             WidgetTransferSummary(transfers: trip.transfers)
-            Image(systemName: "chevron.right").font(.system(size: 7)).foregroundStyle(.tertiary)
+            Image(systemName: "chevron.right").font(.caption2).foregroundStyle(.tertiary).accessibilityHidden(true)
             compactStation(trip.arrival.stationName, suffix: "着")
         }
     }
 
     private func compactStation(_ station: String, suffix: String) -> some View {
-        Text("\(station) \(suffix)").font(.system(size: 8)).foregroundStyle(.secondary).lineLimit(2).minimumScaleFactor(0.7)
+        Text("\(station) \(suffix)").font(.caption2).foregroundStyle(.secondary).lineLimit(2).minimumScaleFactor(0.7)
             .multilineTextAlignment(.center).frame(maxWidth: .infinity)
     }
 }
@@ -193,7 +193,7 @@ private struct CompactUnavailableJourney: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(title).font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
+            Text(title).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
             Text(text).font(.caption2).lineLimit(2).minimumScaleFactor(0.75)
         }.frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -210,7 +210,7 @@ private struct DetailedJourney: View {
             Text(title).font(.caption.bold())
             HStack(spacing: 5) {
                 Text(ServiceClock.time(isLast ? trip.leaveBy : now, relativeTo: now)).font(.title3.bold()).monospacedDigit()
-                Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
+                Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary).accessibilityHidden(true)
                 Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.title3.bold()).monospacedDigit()
             }.frame(maxWidth: .infinity, alignment: .center)
             Text("徒歩\(trip.walkToStationMinutes)分").font(.caption2).foregroundStyle(.secondary)
@@ -236,7 +236,7 @@ private struct FullJourney: View {
                 Text(title).font(.headline)
                 Spacer()
                 Text(ServiceClock.time(isLast ? trip.leaveBy : now, relativeTo: now)).font(.title2.bold()).monospacedDigit()
-                Image(systemName: "arrow.right").foregroundStyle(.tertiary)
+                Image(systemName: "arrow.right").foregroundStyle(.tertiary).accessibilityHidden(true)
                 Text(ServiceClock.time(trip.finalArrivalTime, relativeTo: now)).font(.title2.bold()).monospacedDigit()
             }
             HStack(spacing: 8) {
@@ -324,7 +324,7 @@ private struct WidgetTransferSummary: View {
             } else if transfers.count == 1, let transfer = transfers.first {
                 VStack(spacing: 1) {
                     Text(transfer.arrival.stationName).lineLimit(2)
-                    Text("乗換").font(.system(size: 9))
+                    Text("乗換").font(.caption2)
                 }
             } else {
                 Text("乗換\(transfers.count)件")
