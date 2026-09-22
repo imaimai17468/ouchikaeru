@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 private enum LegalURL {
@@ -26,21 +27,25 @@ struct HomeView: View {
                                         horizontal: false, vertical: true)
                                 }
                                 HStack(spacing: 18) {
-                                    Button("名前を変更") {
+                                    Button {
                                         destinationName = destination.name
                                         renaming = true
+                                    } label: {
+                                        Text("名前を変更").accessibleTapTarget()
                                     }
-                                    Button("住所を変更") { editing = true }
-                                }.buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).font(.subheadline.weight(.medium)).frame(
-                                    minHeight: 44)
+                                    Button(action: { editing = true }, label: { Text("住所を変更").accessibleTapTarget() })
+                                }.buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).font(.subheadline.weight(.medium))
                             }.frame(maxWidth: .infinity, alignment: .leading)
                             HStack(spacing: 0) {
-                                Button("再読み込み", systemImage: "arrow.clockwise") { Task { await model.refresh() } }.frame(
-                                    width: 44, height: 44
-                                ).contentShape(Rectangle()).disabled(model.isLoading)
-                                Button("情報・規約", systemImage: "doc.text") { showingSettings = true }.frame(width: 44, height: 44)
-                                    .contentShape(Rectangle())
-                            }.labelStyle(.iconOnly).buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).font(.title3)
+                                Button(
+                                    action: { Task { await model.refresh() } },
+                                    label: { Image(systemName: "arrow.clockwise").accessibleTapTarget() }
+                                ).disabled(model.isLoading).accessibilityLabel("再読み込み")
+                                Button(
+                                    action: { showingSettings = true },
+                                    label: { Image(systemName: "doc.text").accessibleTapTarget() }
+                                ).accessibilityLabel("情報・規約")
+                            }.buttonStyle(.plain).foregroundStyle(Color.ouchiGreen).font(.title3)
                         }
                         if let summary = model.summary {
                             TimelineView(.periodic(from: .now, by: 30)) { context in
@@ -83,7 +88,8 @@ struct HomeView: View {
                                 Text("経路検索時に現在地と目的地の座標をTransit APIへ送信します。移動履歴は保存しません。").font(.caption).foregroundStyle(.secondary)
                                     .multilineTextAlignment(.center)
                                 if let privacyURL = LegalURL.privacy {
-                                    Link("プライバシーポリシー", destination: privacyURL).font(.caption.weight(.medium))
+                                    Link(destination: privacyURL) { Text("プライバシーポリシー").accessibleTapTarget() }.font(
+                                        .caption.weight(.medium))
                                 }
                             }.padding(.top, 4)
                         }.frame(maxWidth: .infinity).padding(.vertical, 48)
@@ -104,9 +110,21 @@ struct HomeView: View {
                 Text("住所はそのままで、表示する名前を変更します。")
             }.refreshable { await model.refresh() }.onReceive(refreshTimer) { date in
                 if model.summary?.needsRefresh(at: date) == true, model.message == nil { Task { await model.refresh() } }
+            }.onChange(of: model.isLoading) { wasLoading, isLoading in
+                if isLoading {
+                    announce("経路を更新中です")
+                } else if wasLoading, let message = model.message {
+                    announce("経路を更新できませんでした。\(message)")
+                } else if wasLoading {
+                    announce("経路を更新しました")
+                }
+            }.onChange(of: model.isLoadingLastTrain) { wasLoading, isLoading in
+                if wasLoading, !isLoading { announce("終電情報を更新しました") }
             }
         }
     }
+
+    private func announce(_ message: String) { AccessibilityNotification.Announcement(message).post() }
 
     private func saveDestinationName() {
         guard var destination = model.destination else { return }
@@ -123,10 +141,12 @@ struct HomeView: View {
                         .red)
                     Text(message).font(.callout).accessibilityIdentifier("route-error-message")
                     if model.needsPermission {
-                        Button("設定を開く") {
+                        Button {
                             if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                                 UIApplication.shared.open(settingsURL)
                             }
+                        } label: {
+                            Text("設定を開く").accessibleTapTarget()
                         }
                     }
                 }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(
@@ -154,7 +174,9 @@ private struct CoverageNoticeCard: View {
             CoverageNoticeRow(title: "利用できない経路", detail: CoverageGuide.unavailable, symbol: "xmark.circle.fill")
             CoverageNoticeRow(title: "時間がかかる場合", detail: CoverageGuide.slow, symbol: "clock.fill")
         }.padding(16).frame(maxWidth: .infinity, alignment: .leading).flatCard().multilineTextAlignment(.leading)
-            .accessibilityElement(children: .combine).accessibilityIdentifier("coverage-notice-card")
+            .accessibilityElement(children: .ignore).accessibilityLabel(
+                "対応地域と制限。利用できる場所、\(CoverageGuide.supported)。利用できない経路、\(CoverageGuide.unavailable)。時間がかかる場合、\(CoverageGuide.slow)。"
+            ).accessibilityIdentifier("coverage-notice-card")
     }
 }
 
@@ -165,7 +187,7 @@ private struct CoverageNoticeRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: symbol).foregroundStyle(Color.ouchiGreen).frame(width: 18)
+            Image(systemName: symbol).foregroundStyle(Color.ouchiGreen).frame(width: 18).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
                 Text(title).font(.subheadline.bold())
                 Text(detail).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -203,7 +225,9 @@ private struct RouteLoadingPanel: View {
                 ProgressView(value: Double(completedSteps), total: 3).progressViewStyle(.linear).accessibilityIdentifier(
                     "route-loading-progress"
                 ).accessibilityLabel("経路更新の進行状況").accessibilityValue(message)
-            }.padding(16).frame(maxWidth: 270).flatCard(cornerRadius: 16)
+            }.padding(16).frame(maxWidth: 270).flatCard(cornerRadius: 16).accessibilityElement(children: .ignore)
+                .accessibilityLabel("経路更新の進行状況").accessibilityValue("\(message)、\(completedSteps) / 3").accessibilityAddTraits(
+                    .updatesFrequently)
         }.animation(.easeInOut(duration: 0.2), value: completedSteps)
     }
 }
@@ -236,9 +260,10 @@ private struct JourneyCard: View {
                 Button(action: toggleDetails) {
                     HStack(spacing: 5) {
                         Text("経路詳細")
-                        Image(systemName: "chevron.down").rotationEffect(.degrees(expanded ? 180 : 0))
-                    }.padding(.horizontal, 10).background(Color.appSurface)
-                }.buttonStyle(.plain).accessibilityValue(expanded ? "開いています" : "閉じています")
+                        Image(systemName: "chevron.down").rotationEffect(.degrees(expanded ? 180 : 0)).accessibilityHidden(true)
+                    }.padding(.horizontal, 10).background(Color.appSurface).accessibleTapTarget()
+                }.buttonStyle(.plain).accessibilityValue(expanded ? "開いています" : "閉じています").accessibilityHint(
+                    expanded ? "ダブルタップで経路詳細を閉じます" : "ダブルタップで経路詳細を開きます")
             }.font(.caption).foregroundStyle(.secondary).frame(minHeight: 44)
             RouteDetail(trip: trip, destinationName: destinationName, now: now, expanded: expanded).padding(
                 .top, expanded ? 8 : 0)
@@ -277,8 +302,8 @@ private struct RouteDetail: View {
                 Text("到着").foregroundStyle(.secondary)
             }
         }.background { GeometryReader { proxy in Color.clear.preference(key: DetailHeightKey.self, value: proxy.size.height) } }
-            .frame(height: expanded ? detailHeight : 0, alignment: .top).clipped().onPreferenceChange(
-                DetailHeightKey.self, perform: updateDetailHeight)
+            .frame(height: expanded ? detailHeight : 0, alignment: .top).clipped().accessibilityHidden(!expanded)
+            .onPreferenceChange(DetailHeightKey.self, perform: updateDetailHeight)
     }
 
     private func updateDetailHeight(_ height: CGFloat) { detailHeight = height }
@@ -296,15 +321,20 @@ private struct TransferCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label("\(transfer.arrival.stationName)で乗り換え", systemImage: "arrow.left.arrow.right").font(.subheadline.bold())
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(ServiceClock.time(transfer.arrival.time, relativeTo: now)).font(.headline).monospacedDigit()
-                Text("着").font(.caption).foregroundStyle(.secondary)
-                Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary)
-                Text(ServiceClock.time(transfer.departure.time, relativeTo: now)).font(.headline).monospacedDigit()
-                Text("発").font(.caption).foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) { transferTimes }
+                VStack(alignment: .leading, spacing: 4) { transferTimes }
             }
         }.padding(12).frame(maxWidth: .infinity, alignment: .leading).background(
             Color.appCanvas, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    @ViewBuilder private var transferTimes: some View {
+        Text(ServiceClock.time(transfer.arrival.time, relativeTo: now)).font(.headline).monospacedDigit()
+        Text("着").font(.caption).foregroundStyle(.secondary)
+        Image(systemName: "arrow.right").font(.caption).foregroundStyle(.tertiary).accessibilityHidden(true)
+        Text(ServiceClock.time(transfer.departure.time, relativeTo: now)).font(.headline).monospacedDigit()
+        Text("発").font(.caption).foregroundStyle(.secondary)
     }
 }
 
@@ -326,49 +356,75 @@ private struct JourneyOverview: View {
     let now: Date
     let isStale: Bool
     var isLastTrain = false
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .center, spacing: 14) {
-                endpoint(
-                    label: isLastTrain ? "終電" : "今出ると", time: (isStale || isLastTrain) ? trip.leaveBy : now, place: "現在地",
-                    color: .primary, identifier: nil)
-                Image(systemName: "arrow.right").font(.title3.bold()).foregroundStyle(.tertiary)
-                endpoint(
-                    label: "到着", time: trip.finalArrivalTime, place: destinationName, color: .primary,
-                    identifier: isLastTrain ? "last-train-arrival-time" : "final-arrival-time")
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 12) {
+                    endpoint(
+                        label: isLastTrain ? "終電" : "今出ると", time: (isStale || isLastTrain) ? trip.leaveBy : now, place: "現在地",
+                        color: .primary, identifier: nil)
+                    endpoint(
+                        label: "到着", time: trip.finalArrivalTime, place: destinationName, color: .primary,
+                        identifier: isLastTrain ? "last-train-arrival-time" : "final-arrival-time")
+                }
+            } else {
+                HStack(alignment: .center, spacing: 14) {
+                    endpoint(
+                        label: isLastTrain ? "終電" : "今出ると", time: (isStale || isLastTrain) ? trip.leaveBy : now, place: "現在地",
+                        color: .primary, identifier: nil)
+                    Image(systemName: "arrow.right").font(.title3.bold()).foregroundStyle(.tertiary).accessibilityHidden(true)
+                    endpoint(
+                        label: "到着", time: trip.finalArrivalTime, place: destinationName, color: .primary,
+                        identifier: isLastTrain ? "last-train-arrival-time" : "final-arrival-time")
+                }
             }
-            HStack(alignment: .center, spacing: 5) {
-                railEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発")
-                Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.tertiary)
-                transferNode
-                Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.tertiary)
-                railEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着")
+            if dynamicTypeSize.isAccessibilitySize {
+                VStack(alignment: .leading, spacing: 10) {
+                    railEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発")
+                    transferNode
+                    railEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着")
+                }
+            } else {
+                HStack(alignment: .center, spacing: 5) {
+                    railEndpoint(time: trip.departure.time, station: trip.departure.stationName, suffix: "発")
+                    Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.tertiary).accessibilityHidden(true)
+                    transferNode
+                    Image(systemName: "chevron.right").font(.caption2.bold()).foregroundStyle(.tertiary).accessibilityHidden(true)
+                    railEndpoint(time: trip.arrival.time, station: trip.arrival.stationName, suffix: "着")
+                }
             }
-            HStack(spacing: 8) {
-                Label("駅まで徒歩\(trip.walkToStationMinutes)分", systemImage: "figure.walk")
-                Spacer(minLength: 8)
-                Label("降車後徒歩\(trip.walkToDestinationMinutes)分", systemImage: "figure.walk")
-            }.font(.caption2).foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    Label("駅まで徒歩\(trip.walkToStationMinutes)分", systemImage: "figure.walk")
+                    Spacer(minLength: 8)
+                    Label("降車後徒歩\(trip.walkToDestinationMinutes)分", systemImage: "figure.walk")
+                }
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("駅まで徒歩\(trip.walkToStationMinutes)分", systemImage: "figure.walk")
+                    Label("降車後徒歩\(trip.walkToDestinationMinutes)分", systemImage: "figure.walk")
+                }
+            }.font(.caption).foregroundStyle(.secondary)
         }
     }
 
     private func endpoint(label: String, time: Date, place: String, color: Color, identifier: String?) -> some View {
         VStack(alignment: .center, spacing: 5) {
             Text(label).font(.caption.bold()).foregroundStyle(Color.ouchiGreen)
-            Text(ServiceClock.time(time, relativeTo: now)).font(.system(size: 38, weight: .bold, design: .rounded))
-                .monospacedDigit().lineLimit(1).minimumScaleFactor(0.6).accessibilityIdentifier(identifier ?? "")
-            Text(place).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            Text(ServiceClock.time(time, relativeTo: now)).font(.largeTitle.bold()).fontDesign(.rounded).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.75).accessibilityIdentifier(identifier ?? "")
+            Text(place).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
         }.foregroundStyle(color).frame(maxWidth: .infinity, alignment: .center)
     }
 
     private func railEndpoint(time: Date, station: String, suffix: String) -> some View {
         VStack(alignment: .center, spacing: 3) {
             HStack(spacing: 4) {
-                Image(systemName: "tram.fill").foregroundStyle(Color.ouchiGreen)
+                Image(systemName: "tram.fill").foregroundStyle(Color.ouchiGreen).accessibilityHidden(true)
                 Text(ServiceClock.time(time, relativeTo: now)).monospacedDigit()
             }.font(.subheadline.bold())
-            Text("\(station) \(suffix)").font(.caption).lineLimit(2)
+            Text("\(station) \(suffix)").font(.caption).fixedSize(horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity, alignment: .center)
     }
 
@@ -378,10 +434,10 @@ private struct JourneyOverview: View {
                 Text("直通")
             } else if trip.transfers.count == 1, let transfer = trip.transfers.first {
                 Text(transfer.arrival.stationName)
-                Text("乗換").font(.system(size: 9))
+                Text("乗換").font(.caption2)
             } else {
                 Text("乗換")
-                Text("\(trip.transfers.count)件").font(.system(size: 9))
+                Text("\(trip.transfers.count)件").font(.caption2)
             }
         }.font(.caption2.bold()).foregroundStyle(.secondary).multilineTextAlignment(.center).fixedSize()
     }

@@ -1,6 +1,36 @@
 import XCTest
 
 final class RouteFlowTests: XCTestCase {
+    func testAccessibilitySmoke() throws {
+        continueAfterFailure = false
+        let app = XCUIApplication()
+        app.launch()
+
+        let register = app.buttons["目的地を登録"]
+        if register.waitForExistence(timeout: 5) {
+            register.tap()
+        } else {
+            let editAddress = app.buttons["住所を変更"]
+            XCTAssertTrue(editAddress.waitForExistence(timeout: 10))
+            editAddress.tap()
+        }
+
+        let currentLocation = app.descendants(matching: .any)["destination-current-location"]
+        let close = app.buttons["閉じる"]
+        let search = app.textFields["目的地の住所を入力"]
+        let selectMapCenter = app.buttons["地図の中心を選択"]
+        for element in [currentLocation, close, search, selectMapCenter] {
+            XCTAssertTrue(element.waitForExistence(timeout: 5))
+            XCTAssertGreaterThanOrEqual(element.frame.width, 44)
+            XCTAssertGreaterThanOrEqual(element.frame.height, 44)
+        }
+
+        selectMapCenter.tap()
+        let save = app.buttons["この住所を登録"]
+        XCTAssertTrue(save.waitForExistence(timeout: 30), app.debugDescription)
+        XCTAssertGreaterThanOrEqual(save.frame.height, 44)
+    }
+
     func testSelectCurrentLocationAsDestination() throws {
         continueAfterFailure = false
         let app = XCUIApplication()

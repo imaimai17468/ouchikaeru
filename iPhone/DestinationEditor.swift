@@ -16,6 +16,7 @@ struct DestinationEditor: View {
     let existing: Destination?
     let onSave: (Destination) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @FocusState private var searchFocused: Bool
     @State private var query = ""
     @State private var selectedName: String?
@@ -38,34 +39,22 @@ struct DestinationEditor: View {
         NavigationStack {
             GeometryReader { geometry in
                 MapReader { proxy in
-                    Map(position: $camera) {
-                        if let coordinate {
-                            Marker(
-                                address ?? "選択した場所",
-                                coordinate: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
-                            ).tint(Color.ouchiGreen)
+                    Group {
+                        if dynamicTypeSize.isAccessibilitySize {
+                            ScrollView {
+                                VStack(spacing: 16) {
+                                    topPanel.padding(.horizontal, 16).padding(.top, 8)
+                                    destinationMap(proxy: proxy).frame(height: 240).clipShape(
+                                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    ).padding(.horizontal, 16)
+                                    selectionPanel
+                                }
+                            }.background(Color(uiColor: .systemBackground)).scrollDismissesKeyboard(.interactively)
+                        } else {
+                            destinationMap(proxy: proxy).overlay(alignment: .top) { topPanel.padding(16) }.overlay(
+                                alignment: .bottom
+                            ) { selectionPanel.offset(y: geometry.safeAreaInsets.bottom) }
                         }
-                    }.mapStyle(.standard(emphasis: .muted)).onTapGesture { point in
-                        guard let selected = proxy.convert(point, from: .local) else { return }
-                        cancelCurrentLocationRequest()
-                        searchFocused = false
-                        query = ""
-                        coordinate = Coordinate(latitude: selected.latitude, longitude: selected.longitude)
-                        selectedName = nil
-                        address = nil
-                        message = nil
-                        selectionID = UUID()
-                    }.overlay(alignment: .top) { topPanel.padding(16) }.overlay(alignment: .bottom) {
-                        selectionPanel.offset(y: geometry.safeAreaInsets.bottom)
-                    }.task(id: selectionID) {
-                        guard !currentLocationState.isLocating, let coordinate, address == nil else { return }
-                        let requestID = selectionID
-                        resolving = true
-                        defer { if requestID == selectionID { resolving = false } }
-                        let resolvedAddress = await geocodedAddress(for: coordinate)
-                        guard !Task.isCancelled, requestID == selectionID else { return }
-                        address = resolvedAddress ?? coordinateFallback(for: coordinate)
-                        selectedName = address
                     }
                 }.toolbar(.hidden, for: .navigationBar).onAppear {
                     if let existing {
@@ -76,6 +65,11 @@ struct DestinationEditor: View {
                     }
                 }.onDisappear { currentLocationTask?.cancel() }.onChange(of: query) { _, value in
                     if !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { cancelCurrentLocationRequest() }
+                }.onChange(of: places.count) { _, count in if count > 0 { announce("検索結果が\(count)件見つかりました") } }.onChange(
+                    of: message
+                ) { _, newMessage in if let newMessage { announce(newMessage) } }.onChange(of: address) { _, selectedAddress in
+                    announceAddress(selectedAddress)
+                }.onChange(of: currentLocationState) { _, state in if case .failure(let message, _) = state { announce(message) }
                 }.task(id: query) {
                     places = []
                     message = nil
@@ -108,6 +102,39 @@ struct DestinationEditor: View {
                 }
             }
         }
+    }
+}
+
+private extension DestinationEditor {
+    private func destinationMap(proxy: MapProxy) -> some View {
+        Map(position: $camera) {
+            if let coordinate {
+                Marker(
+                    address ?? "選択した場所",
+                    coordinate: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude)
+                ).tint(Color.ouchiGreen)
+            }
+        }.mapStyle(.standard(emphasis: .muted)).onTapGesture { point in
+            guard let selected = proxy.convert(point, from: .local) else { return }
+            select(Coordinate(latitude: selected.latitude, longitude: selected.longitude))
+        }.accessibilityElement(children: .contain).accessibilityLabel("目的地を選ぶ地図").accessibilityHint(
+            "地図を移動したあと、アクションから地図の中心を目的地に選べます"
+        ).accessibilityAction(named: "地図の中心を目的地に選択") { selectMapCenter() }.task(id: selectionID) {
+            guard !currentLocationState.isLocating, let coordinate, address == nil else { return }
+            let requestID = selectionID
+            resolving = true
+            defer { if requestID == selectionID { resolving = false } }
+            let resolvedAddress = await geocodedAddress(for: coordinate)
+            guard !Task.isCancelled, requestID == selectionID else { return }
+            address = resolvedAddress ?? coordinateFallback(for: coordinate)
+            selectedName = address
+        }
+    }
+
+    private func announce(_ message: String) { AccessibilityNotification.Announcement(message).post() }
+
+    private func announceAddress(_ selectedAddress: String?) {
+        if let selectedAddress { announce("目的地の住所は\(selectedAddress)です") }
     }
 
     private func geocodedAddress(for coordinate: Coordinate) async -> String? {
@@ -153,24 +180,26 @@ struct DestinationEditor: View {
     private var searchPanel: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("目的地の住所を入力", text: $query).focused($searchFocused).submitLabel(.search).onSubmit {
-                    searchFocused = false
-                }.autocorrectionDisabled()
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary).accessibilityHidden(true)
+                TextField("目的地の住所を入力", text: $query).focused($searchFocused).accessibilityLabel("目的地の住所").accessibilityIdentifier(
+                    "目的地の住所を入力"
+                ).submitLabel(.search).onSubmit { searchFocused = false }.autocorrectionDisabled()
                 if searching { ProgressView() }
                 if !query.isEmpty {
-                    Button("検索をクリア", systemImage: "xmark.circle.fill") { query = "" }.foregroundStyle(.secondary).labelStyle(
-                        .iconOnly)
+                    Button(action: { query = "" }, label: { Image(systemName: "xmark.circle.fill").accessibleTapTarget() })
+                        .foregroundStyle(.secondary).accessibilityLabel("検索をクリア")
                 }
             }.padding(16)
             Divider()
             Button(action: selectCurrentLocation) {
                 HStack(spacing: 12) {
-                    Image(systemName: "location.fill").foregroundStyle(Color.ouchiGreen)
+                    Image(systemName: "location.fill").foregroundStyle(Color.ouchiGreen).accessibilityHidden(true)
                     Text("現在地を指定").foregroundStyle(.primary)
                     Spacer(minLength: 0)
                     if currentLocationState.isLocating { ProgressView() }
-                }.padding(.horizontal, 16).frame(minHeight: 44)
+                }.padding(.horizontal, 16).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(
+                    Rectangle()
+                ).accessibilityElement(children: .combine)
             }.buttonStyle(.plain).disabled(currentLocationState.isLocating).accessibilityIdentifier(
                 "destination-current-location")
             if !places.isEmpty {
@@ -191,14 +220,17 @@ struct DestinationEditor: View {
                                 moveCamera(to: place.coordinate)
                             } label: {
                                 HStack(alignment: .top, spacing: 12) {
-                                    Image(systemName: "mappin.circle.fill").foregroundStyle(Color.ouchiGreen)
+                                    Image(systemName: "mappin.circle.fill").foregroundStyle(Color.ouchiGreen).accessibilityHidden(
+                                        true)
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text(place.displayName).foregroundStyle(.primary)
                                         Text(place.subtitle).font(.caption).foregroundStyle(.secondary)
                                     }
                                     Spacer(minLength: 0)
                                     Image(systemName: "arrow.up.left").font(.caption).foregroundStyle(.secondary)
-                                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                                        .accessibilityHidden(true)
+                                }.padding(16).frame(maxWidth: .infinity, minHeight: 44, alignment: .leading).contentShape(
+                                    Rectangle())
                             }.buttonStyle(.plain).accessibilityIdentifier("place-result-\(place.id)")
                             Divider().padding(.leading, 48)
                         }
@@ -209,12 +241,24 @@ struct DestinationEditor: View {
             color: .black.opacity(0.1), radius: 16, y: 6)
     }
 
-    private var topPanel: some View {
-        HStack(alignment: .top, spacing: 12) {
-            searchPanel
-            Button("閉じる", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly).font(.headline).frame(width: 52, height: 52)
-                .background(.regularMaterial, in: Circle()).shadow(color: .black.opacity(0.1), radius: 16, y: 6)
+    @ViewBuilder private var topPanel: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .trailing, spacing: 12) {
+                closeButton
+                searchPanel
+            }
+        } else {
+            HStack(alignment: .top, spacing: 12) {
+                searchPanel
+                closeButton
+            }
         }
+    }
+
+    private var closeButton: some View {
+        Button(action: { dismiss() }, label: { Image(systemName: "xmark").frame(width: 52, height: 52).contentShape(Circle()) })
+            .font(.headline).accessibilityLabel("閉じる").background(.regularMaterial, in: Circle()).shadow(
+                color: .black.opacity(0.1), radius: 16, y: 6)
     }
 
     private var selectionPanel: some View {
@@ -225,7 +269,7 @@ struct DestinationEditor: View {
                 ProgressView("この場所の住所を確認中")
             } else if let address {
                 Label("目的地の住所", systemImage: "mappin.and.ellipse").font(.caption.bold()).foregroundStyle(.secondary)
-                Text(address).font(.headline).lineLimit(3)
+                Text(address).font(.headline).fixedSize(horizontal: false, vertical: true)
                 Text("名前は登録後に「自宅」などに変更できます。").font(.caption).foregroundStyle(.secondary)
                 Button {
                     guard let coordinate else { return }
@@ -240,17 +284,25 @@ struct DestinationEditor: View {
                     Text("この住所を登録").font(.headline).frame(maxWidth: .infinity).padding(.vertical, 8)
                 }.buttonStyle(OuchiPrimaryButtonStyle()).disabled(coordinate?.isValid != true)
             } else {
-                Label("帰る場所はどこですか？", systemImage: "house.fill").font(.headline)
-                Text("住所を検索すると、地図で場所を確認できます。地図をタップして選ぶこともできます。").font(.subheadline).foregroundStyle(.secondary)
+                HStack {
+                    Image(systemName: "house.fill").accessibilityHidden(true)
+                    Text("帰る場所はどこですか？")
+                }.font(.headline)
+                Text("住所を検索するか、地図を移動して中心を選択できます。").font(.subheadline).foregroundStyle(.secondary)
+                Button(action: selectMapCenter) {
+                    Label("地図の中心を選択", systemImage: "scope").frame(maxWidth: .infinity, alignment: .leading).accessibleTapTarget()
+                }
             }
             if let message { Text(message).font(.caption).foregroundStyle(.secondary) }
             if case .failure(let message, let needsPermission) = currentLocationState {
                 Text(message).font(.caption).foregroundStyle(.red)
                 if needsPermission {
-                    Button("位置情報の設定を開く") {
+                    Button {
                         if let settingsURL = URL(string: UIApplication.openSettingsURLString) {
                             UIApplication.shared.open(settingsURL)
                         }
+                    } label: {
+                        Text("位置情報の設定を開く").accessibleTapTarget()
                     }
                 }
             }
@@ -285,6 +337,25 @@ struct DestinationEditor: View {
                     message: error.localizedDescription, needsPermission: (error as? LocationProvider.Failure) == .denied)
             }
         }
+    }
+
+    private func selectMapCenter() {
+        guard let center = camera.region?.center else {
+            announce("地図の中心を取得できませんでした")
+            return
+        }
+        select(Coordinate(latitude: center.latitude, longitude: center.longitude))
+    }
+
+    private func select(_ selected: Coordinate) {
+        cancelCurrentLocationRequest()
+        searchFocused = false
+        query = ""
+        coordinate = selected
+        selectedName = nil
+        address = nil
+        message = nil
+        selectionID = UUID()
     }
 
     private func cancelCurrentLocationRequest() {
