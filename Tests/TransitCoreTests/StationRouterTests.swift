@@ -149,6 +149,16 @@ final class StationRouterTests: XCTestCase {
         XCTAssertLessThan(start.duration(to: .now), .seconds(1))
     }
 
+    func testExcessiveCoordinateWalkWaitsForStationRoute() async throws {
+        let api = StationAPIStub(coordinateWalkMinutes: 945, stationDelay: .seconds(1))
+        let router = StationRouter(api: api, walking: WalkingStub())
+        let context = await router.prepare(origin: origin, destination: destination)
+
+        let trips = try await router.plan(origin: origin, destination: destination, context: context, now: Date(), last: false)
+
+        XCTAssertEqual(RouteParser.recommended(trips, now: .distantPast)?.lineName, "feed:b")
+    }
+
     func testBoardingAfterMidnightUsesNextServiceDate() async throws {
         let api = StationAPIStub()
         let router = StationRouter(api: api, walking: WalkingStub())
@@ -207,10 +217,14 @@ private actor StationAPIStub: StationRoutingAPI {
     var discoveryCount = 0
     let emptyStations: Bool
     let failingStation: String?
+    let coordinateWalkMinutes: Int
     let stationDelay: Duration?
-    init(emptyStations: Bool = false, failingStation: String? = nil, stationDelay: Duration? = nil) {
+    init(
+        emptyStations: Bool = false, failingStation: String? = nil, coordinateWalkMinutes: Int = 0, stationDelay: Duration? = nil
+    ) {
         self.emptyStations = emptyStations
         self.failingStation = failingStation
+        self.coordinateWalkMinutes = coordinateWalkMinutes
         self.stationDelay = stationDelay
     }
     func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] {
@@ -237,6 +251,7 @@ private actor StationAPIStub: StationRoutingAPI {
     func plan(origin: Coordinate, destination: Coordinate, now: Date, last: Bool) async throws -> [Trip] {
         fallbackCount += 1
         var trip = fixture(departure: now.addingTimeInterval(600), line: "coordinate")
+        trip.walkToStationMinutes = coordinateWalkMinutes
         trip.departure.stationID = "feed:b"
         trip.arrival.stationID = "feed:c"
         return [trip]

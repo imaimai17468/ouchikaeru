@@ -41,6 +41,8 @@ public struct PlanResponse: Decodable {
 }
 
 public enum RouteParser {
+    private static let maximumEndpointWalkMinutes = 180
+
     public static func trips(from response: PlanResponse) throws -> [Trip] {
         guard let zone = TimeZone(identifier: response.timezone) else { throw TransitError.invalidResponse }
         let f = DateFormatter()
@@ -85,7 +87,7 @@ public enum RouteParser {
         }
     }
     public static func recommended(_ trips: [Trip], now: Date) -> Trip? {
-        trips.filter { $0.leaveBy >= now }.min { $0.finalArrivalTime < $1.finalArrivalTime }
+        trips.filter { $0.leaveBy >= now && hasPracticalEndpointWalks($0) }.min { $0.finalArrivalTime < $1.finalArrivalTime }
     }
     public static func lastTrain(in trips: [Trip], serviceDate: Date) -> Trip? {
         trips.filter { isValidLastTrain($0, serviceDate: serviceDate) }.max { $0.leaveBy < $1.leaveBy }
@@ -99,9 +101,14 @@ public enum RouteParser {
             let wait = $0.departure.time.timeIntervalSince($0.arrival.time)
             return wait >= 0 && wait <= 90 * 60
         }
-        return trip.leaveBy >= serviceStart && trip.departure.time >= serviceStart && trip.departure.time <= latestBoarding
-            && trip.finalArrivalTime >= trip.arrival.time && trip.finalArrivalTime <= latestArrival
-            && trip.walkToDestinationMinutes <= 180 && transferWaitsAreContinuous
+        return hasPracticalEndpointWalks(trip) && trip.leaveBy >= serviceStart && trip.departure.time >= serviceStart
+            && trip.departure.time <= latestBoarding && trip.finalArrivalTime >= trip.arrival.time
+            && trip.finalArrivalTime <= latestArrival && transferWaitsAreContinuous
+    }
+
+    private static func hasPracticalEndpointWalks(_ trip: Trip) -> Bool {
+        (0...maximumEndpointWalkMinutes).contains(trip.walkToStationMinutes)
+            && (0...maximumEndpointWalkMinutes).contains(trip.walkToDestinationMinutes)
     }
 }
 
