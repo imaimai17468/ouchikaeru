@@ -149,8 +149,8 @@ final class StationRouterTests: XCTestCase {
         XCTAssertLessThan(start.duration(to: .now), .seconds(1))
     }
 
-    func testExcessiveCoordinateWalkWaitsForStationRoute() async throws {
-        let api = StationAPIStub(coordinateWalkMinutes: 945, stationDelay: .seconds(1))
+    func testCoordinateWalkBeyondStationSearchLimitWaitsForStationRoute() async throws {
+        let api = StationAPIStub(coordinateWalkMinutes: 32, stationDelay: .seconds(1))
         let router = StationRouter(api: api, walking: WalkingStub())
         let context = await router.prepare(origin: origin, destination: destination)
 

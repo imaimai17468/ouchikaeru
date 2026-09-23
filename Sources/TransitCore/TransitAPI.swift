@@ -41,7 +41,8 @@ public struct PlanResponse: Decodable {
 }
 
 public enum RouteParser {
-    private static let maximumEndpointWalkMinutes = 180
+    private static let maximumOriginWalkMinutes = 31
+    private static let maximumDestinationWalkMinutes = 30
 
     public static func trips(from response: PlanResponse) throws -> [Trip] {
         guard let zone = TimeZone(identifier: response.timezone) else { throw TransitError.invalidResponse }
@@ -107,8 +108,8 @@ public enum RouteParser {
     }
 
     private static func hasPracticalEndpointWalks(_ trip: Trip) -> Bool {
-        (0...maximumEndpointWalkMinutes).contains(trip.walkToStationMinutes)
-            && (0...maximumEndpointWalkMinutes).contains(trip.walkToDestinationMinutes)
+        (0...maximumOriginWalkMinutes).contains(trip.walkToStationMinutes)
+            && (0...maximumDestinationWalkMinutes).contains(trip.walkToDestinationMinutes)
     }
 }
 

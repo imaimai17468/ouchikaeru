@@ -37,6 +37,19 @@ final class RouteParserTests: XCTestCase {
         let now = trips[0].departure.time.addingTimeInterval(-60)
         XCTAssertEqual(RouteParser.recommended(trips, now: now), trips[2])
     }
+    func testRecommendedEnforcesStationWalkingLimits() throws {
+        var trip = try XCTUnwrap(RouteParser.trips(from: response(journey())).first)
+        trip.walkToStationMinutes = 31
+        trip.walkToDestinationMinutes = 30
+        let now = trip.leaveBy
+
+        XCTAssertEqual(RouteParser.recommended([trip], now: now), trip)
+        trip.walkToStationMinutes = 32
+        XCTAssertNil(RouteParser.recommended([trip], now: now))
+        trip.walkToStationMinutes = 31
+        trip.walkToDestinationMinutes = 31
+        XCTAssertNil(RouteParser.recommended([trip], now: now))
+    }
     func testNegativeSecondsAndISOServiceDate() throws {
         let trip = try XCTUnwrap(
             RouteParser.trips(from: response(journey(departure: -600, arrival: 120), date: "2026-09-10")).first)
