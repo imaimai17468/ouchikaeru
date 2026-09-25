@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>1.0.1</string>
+	<string>1.0.2</string>
 	<key>CFBundleVersion</key>
-	<string>5</string>
+	<string>6</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>現在地から登録した目的地までの経路を検索するため、現在地を交通経路APIへ送信します。</string>
 	<key>WKApplication</key>
