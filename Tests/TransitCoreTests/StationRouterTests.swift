@@ -60,6 +60,17 @@ final class StationRouterTests: XCTestCase {
         XCTAssertEqual(count, 1)
     }
 
+    func testExtendedDiscoverySuppliesStationsOutsideAPIRadius() async throws {
+        let api = StationAPIStub(emptyStations: true)
+        let discovery = StationDiscoveryStub()
+        let router = StationRouter(api: api, walking: WalkingStub(), stationDiscovery: discovery)
+
+        let context = await router.prepare(origin: origin, destination: destination)
+
+        XCTAssertEqual(context?.departures.first?.station.id, "extended:origin")
+        XCTAssertEqual(context?.arrivals.first?.station.id, "extended:destination")
+    }
+
     func testLastTrainCacheExpiresAndDoesNotCrossServiceDate() async throws {
         let api = StationAPIStub(emptyStations: true)
         let router = StationRouter(api: api, walking: WalkingStub())
@@ -202,6 +213,16 @@ private actor WalkingStub: WalkingProviding {
     func seconds(from: Coordinate, to: Coordinate) async throws -> TimeInterval {
         count += 1
         return 91
+    }
+}
+
+private struct StationDiscoveryStub: StationDiscovering {
+    func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] {
+        let isOrigin = coordinate.latitude < 35.5
+        let station = StationCandidate(
+            id: isOrigin ? "extended:origin" : "extended:destination", name: isOrigin ? "東京" : "東金",
+            lat: coordinate.latitude + 0.001, lon: coordinate.longitude, kind: "station")
+        return [station]
     }
 }
 

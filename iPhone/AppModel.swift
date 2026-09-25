@@ -84,7 +84,8 @@ private enum AppRouteState: Equatable {
 
     convenience init() {
         self.init(
-            location: LocationProvider(), planner: RoutePlanner(api: TransitAPI(), walking: MapWalkingProvider()),
+            location: LocationProvider(),
+            planner: RoutePlanner(api: TransitAPI(), walking: MapWalkingProvider(), stationDiscovery: MapStationProvider()),
             store: SharedStore(), clock: .system
         ) {
             WidgetCenter.shared.reloadAllTimelines()

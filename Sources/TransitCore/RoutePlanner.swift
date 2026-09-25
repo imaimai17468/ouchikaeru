@@ -30,8 +30,11 @@ public actor RoutePlanner: RoutePlanning {
     private let router: StationRouter
     private let clock: WallClock
 
-    public init(api: any StationRoutingAPI, walking: any WalkingProviding, clock: WallClock = .system) {
-        router = StationRouter(api: api, walking: walking, clock: clock)
+    public init(
+        api: any StationRoutingAPI, walking: any WalkingProviding, stationDiscovery: (any StationDiscovering)? = nil,
+        clock: WallClock = .system
+    ) {
+        router = StationRouter(api: api, walking: walking, stationDiscovery: stationDiscovery, clock: clock)
         self.clock = clock
     }
 

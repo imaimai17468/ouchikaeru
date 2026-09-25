@@ -237,7 +237,6 @@ public struct TransitAPI: StationRoutingAPI {
     }
     public func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] {
         struct Nearby: Decodable { let places: [Place] }
-        struct Matches: Decodable { let stations: [StationCandidate] }
         let nearby: Nearby = try await get(
             path: "places/reverse",
             query: [
@@ -249,18 +248,7 @@ public struct TransitAPI: StationRoutingAPI {
             return place.displayName
         }.prefix(3)
         return await withTaskGroup(of: [StationCandidate].self) { group in
-            for name in names {
-                group.addTask {
-                    do {
-                        let matches: Matches = try await self.get(
-                            path: "locations/suggest", query: ["q": name, "limit": "30"], timeout: 8)
-                        return matches.stations.filter {
-                            $0.kind == "station" && StationNameFormatter.displayName($0.name) == name
-                                && $0.coordinate.map { $0.isValid && $0.distance(to: coordinate) <= 750 } == true
-                        }
-                    } catch { return [] }
-                }
-            }
+            for name in names { group.addTask { (try? await self.stationCandidates(named: name, near: coordinate)) ?? [] } }
             var found: [StationCandidate] = []
             for await stations in group { found += stations }
             var ids = Set<String>()
@@ -270,6 +258,15 @@ public struct TransitAPI: StationRoutingAPI {
                 if leftWeight != rightWeight { return leftWeight > rightWeight }
                 return lhs.id < rhs.id
             }
+        }
+    }
+    public func stationCandidates(named name: String, near coordinate: Coordinate) async throws -> [StationCandidate] {
+        struct Matches: Decodable { let stations: [StationCandidate] }
+        let displayName = StationNameFormatter.displayName(name)
+        let matches: Matches = try await get(path: "locations/suggest", query: ["q": displayName, "limit": "30"], timeout: 8)
+        return matches.stations.filter {
+            $0.kind == "station" && StationNameFormatter.displayName($0.name) == displayName
+                && $0.coordinate.map { $0.isValid && $0.distance(to: coordinate) <= 750 } == true
         }
     }
     public func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip] {

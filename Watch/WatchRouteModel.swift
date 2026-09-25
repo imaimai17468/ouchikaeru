@@ -15,7 +15,8 @@ import Foundation
 
     convenience init() {
         self.init(
-            location: LocationProvider(), planner: RoutePlanner(api: TransitAPI(), walking: MapWalkingProvider()),
+            location: LocationProvider(),
+            planner: RoutePlanner(api: TransitAPI(), walking: MapWalkingProvider(), stationDiscovery: MapStationProvider()),
             store: SharedStore(), connectivity: WatchSync.shared, clock: .system)
     }
 

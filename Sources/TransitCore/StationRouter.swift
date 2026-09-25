@@ -23,8 +23,9 @@ public struct StationCandidate: Codable, Equatable, Sendable {
     }
 }
 
-public protocol StationRoutingAPI: Sendable {
-    func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate]
+public protocol StationDiscovering: Sendable { func nearbyStations(at coordinate: Coordinate) async throws -> [StationCandidate] }
+
+public protocol StationRoutingAPI: StationDiscovering {
     func stationPlan(from: String, to: String, boardingAfter: Date, serviceDate: Date, last: Bool) async throws -> [Trip]
     func plan(origin: Coordinate, destination: Coordinate, now: Date, last: Bool) async throws -> [Trip]
 }
@@ -62,6 +63,7 @@ public struct StationPair: Equatable, Sendable {
 /// Holds only the current origin/destination station and walking data, never a location history.
 public actor StationRouter {
     private let api: any StationRoutingAPI
+    private let stationDiscovery: any StationDiscovering
     private let walking: any WalkingProviding
     private let clock: WallClock
     private struct EndCache {
@@ -92,8 +94,12 @@ public actor StationRouter {
     }
     private var normalPairs: PairCache?
     private var lastPairs: PairCache?
-    public init(api: any StationRoutingAPI, walking: any WalkingProviding, clock: WallClock = .system) {
+    public init(
+        api: any StationRoutingAPI, walking: any WalkingProviding, stationDiscovery: (any StationDiscovering)? = nil,
+        clock: WallClock = .system
+    ) {
         self.api = api
+        self.stationDiscovery = stationDiscovery ?? api
         self.walking = walking
         self.clock = clock
     }
@@ -116,7 +122,12 @@ public actor StationRouter {
             cached.map { $0.anchor.distance(to: coordinate) <= 100 && checkedAt.timeIntervalSince($0.fetchedAt) < 3600 } ?? false
         do {
             let stations: [StationCandidate]
-            if valid, let cached { stations = cached.stations } else { stations = try await api.nearbyStations(at: coordinate) }
+            if valid, let cached {
+                stations = cached.stations
+            } else {
+                let apiStations = (try? await api.nearbyStations(at: coordinate)) ?? []
+                stations = apiStations.isEmpty ? try await stationDiscovery.nearbyStations(at: coordinate) : apiStations
+            }
             guard !stations.isEmpty, stations.count <= 30, let station = nearestRepresentative(in: stations, to: coordinate)
             else { return [] }
             let canReuseWalks = valid && cached.map { $0.walkAnchor.distance(to: coordinate) <= 50 } == true
